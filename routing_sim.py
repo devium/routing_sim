@@ -213,6 +213,49 @@ class LightClient(Node):
     pass
 
 
+class PathFindingHelper(object):
+    def __init__(self, cn, range_, center):
+        self.cn = cn
+        self.range = range_
+        self.center = center
+
+    def is_in_range(self, target):
+        assert isinstance(target, Node)
+
+        return abs(target.uid - self.center) <= self.range / 2
+
+    def _get_path_cost_function(self, value, hop_cost=1):
+        """
+        Same as the global :func:`~ChannelNetwork._get_path_cost_function` except it considers
+        nodes outside the helper's range unavailable.
+        """
+
+        def cost_func_fast(a, b, _account):
+            if not self.is_in_range(a) and not self.is_in_range(b):
+                return None
+
+            if a.uid < b.uid:
+                capacity = _account['balance'] + _account[a.uid]
+            else:
+                capacity = - _account['balance'] + _account[a.uid]
+
+            assert capacity >= 0
+            if capacity < value:
+                return None
+            return hop_cost
+
+        return cost_func_fast
+
+    def find_path(self, source, target, value):
+        assert isinstance(source, Node)
+        assert isinstance(target, Node)
+        try:
+            path = dijkstra_path(self.cn.G, source, target, self._get_path_cost_function(value))
+            return path
+        except nx.NetworkXNoPath:
+            return None
+
+
 class ChannelNetwork(object):
 
     max_id = 2**32
@@ -224,6 +267,7 @@ class ChannelNetwork(object):
         self.node_by_id = dict()
         self.nodeids = []
         self.nodes = []
+        self.helpers = []
 
     def generate_nodes(self, config):
         # full nodes
@@ -236,6 +280,14 @@ class ChannelNetwork(object):
 
         self.nodeids = sorted(self.node_by_id.keys())
         self.nodes = [self.node_by_id[_uid] for _uid in self.nodeids]
+
+    def generate_helpers(self, config):
+        for i in range(config.ph_num_helpers):
+            center = random.randrange(self.max_id)
+            min_range = int(config.ph_min_range_fr * self.max_id)
+            max_range = int(config.ph_max_range_fr * self.max_id)
+            range_ = random.randrange(min_range, max_range)
+            self.helpers.append(PathFindingHelper(self, range_, center))
 
     def connect_nodes(self):
         for node in self.nodes[:]:
@@ -331,7 +383,7 @@ class ChannelNetwork(object):
         assert isinstance(source, Node)
         assert isinstance(target, Node)
         contacted = 0
-        for max_hops in (50, 5, 10, 15, 50):  # breath first possible
+        for max_hops in (5, 10, 15, 50):  # breath first possible
             c, path = source.find_path_recursively(target.uid, value, max_hops)
             contacted += c
             if path:
@@ -340,6 +392,29 @@ class ChannelNetwork(object):
             assert len(path) == len(set(path))  # no node visited twice
             return contacted, path + [target]
         return contacted, []
+
+    def find_path_with_helper(self, source, target, value):
+        """
+        Find a path to the target using pathfinding helpers that know about channel balances in
+        the target address sector.
+        """
+        assert isinstance(source, Node)
+        assert isinstance(target, Node)
+
+        helpers = (helper for helper in self.helpers if helper.is_in_range(target))
+
+        # Assume direct entrypoint into target sector.
+        for helper in helpers:
+            # TODO
+            print 'Trying to route through helper %d +/- %d to %d.' % (helper.center,
+                                                                       int(helper.range / 2),
+                                                                       target.uid)
+            path = helper.find_path(source, target, value)
+            if path:
+                return path, helper
+
+        return None, None
+
 
 
 def test_basic_channel():
@@ -362,8 +437,9 @@ def setup_network(config):
     assert isinstance(config, BaseNetworkConfiguration)
     cn = ChannelNetwork()
     cn.generate_nodes(config)
+    cn.generate_helpers(config)
     cn.connect_nodes()
-    draw3d(cn)
+    draw(cn)
     # export_obj(cn)
     return cn
 
@@ -378,18 +454,28 @@ def test_global_pathfinding(config, num_paths=10, value=2):
     for i in range(num_paths):
         print "-" * 40
         source, target = random.sample(cn.nodes, 2)
+
         path = cn.find_path_global(source, target, value)
         print len(path), path
         draw(cn, path)
+
         contacted, path = cn.find_path_recursively(source, target, value)
         print len(path), path, contacted
         draw(cn, path)
 
+        path, helper = cn.find_path_with_helper(source, target, value)
+        if path:
+            print len(path), path
+        else:
+            print 'No direct path to target sector.'
+        draw(cn, path, helper)
 
-def draw(cn, path=None):
+
+
+def draw(cn, path=None, helper_highlight=None):
     from utils import draw as _draw
     assert isinstance(cn, ChannelNetwork)
-    _draw(cn, path)
+    _draw(cn, path, helper_highlight)
 
 
 class BaseNetworkConfiguration(object):
@@ -405,8 +491,14 @@ class BaseNetworkConfiguration(object):
     lc_deposit_dist = WeightedDistribution(1, weighted_values=[(10, 90), (100, 10)])
     lc_num_channel_dist = WeightedDistribution(1, weighted_values=[(1, 100)])
 
+    # pathfinding helpers
+    ph_num_helpers = 20
+    ph_max_range_fr = 1/8.
+    ph_min_range_fr = 1/16.
+
     def __init__(self, fn_num_nodes):
         self.fn_num_nodes = fn_num_nodes
+
 
 ##########################################################
 

@@ -161,15 +161,37 @@ class MyColorMap(matplotlib.colors.Colormap):
             return (0.5, 0.5, 0.5, 0.1)
 
 
-def draw(cn, path=None):
+def draw(cn, path=None, helper_highlight=None):
     from routing_sim import ChannelNetwork
+    from matplotlib.patches import Wedge
+    from colorsys import hsv_to_rgb
     # assert isinstance(cn, ChannelNetwork)
     edge_color = '#eeeeee'
-    plt.clf()
     pos = calc_postions(cn)
-    nx.draw(cn.G, pos, edge_color=edge_color, node_size=1)
+
+
+    plt.clf()
+    fig = plt.gcf()
+    ax = fig.add_subplot(111)
+
+    for helper in cn.helpers:
+        # Angles start at (1,0) ccw, node IDs at (0,1) cw.
+        sangle = 90 - (helper.center + helper.range / 2) / float(cn.max_id) * 360
+        eangle = 90 - (helper.center - helper.range / 2) / float(cn.max_id) * 360
+
+        # Magic numbers to make colors and radius distinct but deterministic.
+        color = hsv_to_rgb(helper.center / 100.0 % 1, 0.9, 0.5)
+        radius = helper.center / 1000.0 % 0.3 + 2.1
+
+        if helper == helper_highlight:
+            color = (0.3, 1.0, 0)
+        alpha = 0.6 if helper == helper_highlight else 0.2
+        ax.add_artist(Wedge((0, 0), radius, sangle, eangle, color=color, alpha=alpha))
+
+    nx.draw(cn.G, pos, edge_color=edge_color, node_size=1, ax=ax)
     if path:
         nx.draw_networkx_edges(cn.G, pos, edgelist=path_to_edges(cn, path), edge_color='r')
+
     plt.show()
     raw_input('press any key')
 
