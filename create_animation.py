@@ -5,13 +5,14 @@ from routing_sim import *
 from utils import calc3d_positions
 
 NUM_NODES = 100
-ANIMATION_DELAY_INITIAL = 10
-ANIMATION_DELAY_DECAY = 0.95
-ANIMATION_DELAY_MIN = 3
+ANIMATION_DELAY_INITIAL = 7.0
+ANIMATION_DELAY_DECAY = 0.99
+ANIMATION_DELAY_MIN = 3.0
 ANIMATION_CHANNEL_HOP_DELAY = 1
 TRANSFER_ATTEMPTS_MAX = 10
 TRANSFER_DELAY = 20
 TRANSFER_VALUE = 0.01
+NUM_CHANNELS_PER_POPUP = 2
 
 Animation = namedtuple('Animation', [
     'start_frame',
@@ -21,175 +22,160 @@ Animation = namedtuple('Animation', [
 ])
 
 
-def popup_nodes(hidden_nodes, visible_nodes, start_frame, nodes):
-    """
-    Creates 'show' animations for the given nodes at a certain frame. Only hidden nodes are
-    considered.
-    """
-    assert isinstance(nodes, set)
-    nodes &= hidden_nodes
-    assert not nodes & visible_nodes
+class AnimationGenerator(object):
+    def __init__(self):
+        # Export final network configuration.
+        config = BaseNetworkConfiguration(NUM_NODES)
+        self.cn = ChannelNetwork()
+        self.cn.generate_nodes(config)
+        self.cn.connect_nodes()
+        nodes, self.channel_topology = calc3d_positions(self.cn)
+        self.channel_topology = {frozenset(channel) for channel in self.channel_topology}
+        self.channel_topology = [tuple(channel) for channel in self.channel_topology]
 
-    animations = []
-    for node in nodes:
-        animations.append(Animation(
-            start_frame=start_frame,
-            animation_type='show',
-            element_type='node',
-            element_id=node
-        ))
-        hidden_nodes.remove(node)
-        visible_nodes.add(node)
+        with open('blender/network.json', 'w') as network_file:
+            json.dump({'nodes': nodes, 'channels': self.channel_topology}, network_file, indent=2)
 
-    return animations
+        # Revert simulation back to empty network. Build animations from there.
+        # Note: this only removes edges from the network graph and doesn't affect recursive
+        # routing.
+        self.node_to_index = {node: index for index, node in enumerate(self.cn.nodes)}
+        self.hidden_nodes = set(range(len(nodes)))
+        self.hidden_channels = set()
+        self.visible_nodes = set()
+        self.visible_channels = set()
+        for i, channel in enumerate(self.channel_topology):
+            self.cn.G.remove_edge(self.cn.nodes[channel[0]], self.cn.nodes[channel[1]])
+            self.hidden_channels.add(i)
 
+        random.seed(43)
 
-def popup_channel(
-        hidden_nodes,
-        visible_nodes,
-        hidden_channels,
-        visible_channels,
-        start_frame,
-        channel,
-        channels
-):
-    """
-    Creates a 'show' animation for the given channel and the associated nodes. Already visible
-    nodes or channels are ignored.
-    """
-    if channel in visible_channels:
-        assert channel not in hidden_channels
-        return []
+        # Generate node popup and channel transfer animations.
+        self.frame = 0
+        self.animations = []
+        self.create_channels(1, connected_only=False)
 
-    nodes = set(channels[channel])
-    animations = popup_nodes(hidden_nodes, visible_nodes, start_frame, nodes)
-    animations.append(Animation(
-        start_frame=start_frame,
-        animation_type='show',
-        element_type='channel',
-        element_id=channel
-    ))
-    hidden_channels.remove(channel)
-    visible_channels.add(channel)
-    return animations
+        animation_delay = ANIMATION_DELAY_INITIAL
+        self.frame = animation_delay
+        self.last_transfer = 0
+        while self.hidden_channels:
+            # Popup new channel that is connected to the existing network.
+            self.create_channels(NUM_CHANNELS_PER_POPUP)
 
+            if self.frame - self.last_transfer >= TRANSFER_DELAY:
+                # Create new transfer.
+                self.create_transfer()
 
-def flash_channels(channels, start_frame, delay=ANIMATION_CHANNEL_HOP_DELAY):
-    """
-    Creates a 'flash' animation for a given route.
-    """
+            animation_delay *= ANIMATION_DELAY_DECAY
+            animation_delay = max(animation_delay, ANIMATION_DELAY_MIN)
+            self.frame += int(animation_delay)
 
-    frame_offset = 0
-    animations = []
-    for channel in channels:
-        frame_offset += delay
-        animations.append(Animation(
-            start_frame=start_frame + frame_offset,
-            animation_type='flash',
-            element_type='channel',
-            element_id=channel
-        ))
+        with open('blender/animation.json', 'w') as animation_file:
+            json.dump(self.animations, animation_file, indent=2)
 
-    return animations
+    def popup_channels(self, channels):
+        """
+        Creates a 'show' animation for the given channels and the associated nodes. Already visible
+        nodes or channels are ignored.
+        """
+        for channel in channels:
+            if channel in self.visible_channels:
+                assert channel not in self.hidden_channels
+                return []
 
+            nodes = set(self.channel_topology[channel])
+            self.popup_nodes(nodes)
+            self.animations.append(Animation(
+                start_frame=self.frame,
+                animation_type='show',
+                element_type='channel',
+                element_id=channel
+            ))
+            self.hidden_channels.remove(channel)
+            self.visible_channels.add(channel)
 
-def run():
-    # Export final network configuration.
-    config = BaseNetworkConfiguration(NUM_NODES)
-    cn = ChannelNetwork()
-    cn.generate_nodes(config)
-    cn.connect_nodes()
-    nodes, channels = calc3d_positions(cn)
-    channels = {frozenset(channel) for channel in channels}
-    channels = [tuple(channel) for channel in channels]
+    def popup_nodes(self, nodes):
+        """
+        Creates 'show' animations for the given nodes at a certain frame. Only hidden nodes are
+        considered.
+        """
+        assert isinstance(nodes, set)
+        nodes &= self.hidden_nodes
+        assert not nodes & self.visible_nodes
 
-    with open('blender/network.json', 'w') as network_file:
-        json.dump({'nodes': nodes, 'channels': channels}, network_file, indent=2)
+        for node in nodes:
+            self.animations.append(Animation(
+                start_frame=self.frame,
+                animation_type='show',
+                element_type='node',
+                element_id=node
+            ))
+            self.hidden_nodes.remove(node)
+            self.visible_nodes.add(node)
 
-    # Revert simulation back to empty network. Build animations from there.
-    # Note: this only removes edges from the network graph and doesn't affect recursive routing.
+    def create_channels(self, count, connected_only=True):
+        """
+        Creates both the animation and graph topology in the network simulation for new channels.
+        """
+        if connected_only:
+            connected_hidden_channels = [
+                channel for channel in self.hidden_channels
+                if set(self.channel_topology[channel]) & self.visible_nodes
+            ]
 
-    node_to_index = {node: index for index, node in enumerate(cn.nodes)}
-    hidden_nodes = set(range(len(nodes)))
-    hidden_channels = set()
-    visible_nodes = set()
-    visible_channels = set()
-    for i, channel in enumerate(channels):
-        cn.G.remove_edge(cn.nodes[channel[0]], cn.nodes[channel[1]])
-        hidden_channels.add(i)
+            count = min(count, len(connected_hidden_channels))
+            new_channels = random.sample(connected_hidden_channels, count)
+        else:
+            count = min(count, len(self.hidden_channels))
+            new_channels = random.sample(self.hidden_channels, count)
 
-    random.seed(43)
+        self.popup_channels(new_channels)
+        for channel in new_channels:
+            node_a = self.cn.nodes[self.channel_topology[channel][0]]
+            node_b = self.cn.nodes[self.channel_topology[channel][1]]
+            self.cn.add_edge(node_a, node_b)
+            node_a.setup_channel(node_b)
+            node_b.setup_channel(node_a)
 
-    # Generate node popup and channel transfer animations.
-    animations = []
-    channel = random.sample(hidden_channels, 1)[0]
-    animations += popup_channel(
-        hidden_nodes,
-        visible_nodes,
-        hidden_channels,
-        visible_channels,
-        0,
-        channel,
-        channels
-    )
-    node_a = cn.nodes[channels[channel][0]]
-    node_b = cn.nodes[channels[channel][1]]
-    cn.add_edge(node_a, node_b)
-    node_a.setup_channel(node_b)
-    node_b.setup_channel(node_a)
+    def create_transfer(self):
+        for i in range(TRANSFER_ATTEMPTS_MAX):
+            source, target = random.sample(self.visible_nodes, 2)
+            path = self.cn.find_path_global(
+                self.cn.nodes[source],
+                self.cn.nodes[target],
+                TRANSFER_VALUE
+            )
+            if path:
+                # Find channel for each hop.
+                path_channels = []
+                node_b_idx = self.node_to_index[path[0]]
+                for j in range(len(path) - 1):
+                    node_a_idx = node_b_idx
+                    node_b_idx = self.node_to_index[path[j + 1]]
+                    hop = {node_a_idx, node_b_idx}
+                    hop_channels = [i for i in range(len(self.channel_topology)) if
+                                    set(self.channel_topology[i]) == hop]
+                    assert len(hop_channels) == 1
+                    path_channels.append(hop_channels[0])
 
-    animation_delay = ANIMATION_DELAY_INITIAL
-    frame = animation_delay
-    last_transfer = 0
-    while hidden_channels:
-        # Popup new channel that is connected to the existing network.
-        connected_hidden_channels = [
-            channel for channel in hidden_channels if set(channels[channel]) & visible_nodes
-        ]
-        channel = random.sample(connected_hidden_channels, 1)[0]
-        animations += popup_channel(
-            hidden_nodes,
-            visible_nodes,
-            hidden_channels,
-            visible_channels,
-            frame,
-            channel,
-            channels
-        )
-        node_a = cn.nodes[channels[channel][0]]
-        node_b = cn.nodes[channels[channel][1]]
-        cn.add_edge(node_a, node_b)
-        node_a.setup_channel(node_b)
-        node_b.setup_channel(node_a)
+                self.flash_channels(path_channels)
+                self.last_transfer = self.frame
+                break
 
-        if frame - last_transfer >= TRANSFER_DELAY:
-            # Create new transfer.
-            for i in range(TRANSFER_ATTEMPTS_MAX):
-                source, target = random.sample(visible_nodes, 2)
-                path = cn.find_path_global(cn.nodes[source], cn.nodes[target], TRANSFER_VALUE)
-                if path:
-                    # Find channel for each hop.
-                    path_channels = []
-                    node_b_idx = node_to_index[path[0]]
-                    for j in range(len(path) - 1):
-                        node_a_idx = node_b_idx
-                        node_b_idx = node_to_index[path[j + 1]]
-                        hop = {node_a_idx, node_b_idx}
-                        hop_channels = [i for i in range(len(channels)) if set(channels[i]) == hop]
-                        assert len(hop_channels) == 1
-                        path_channels.append(hop_channels[0])
+    def flash_channels(self, channels):
+        """
+        Creates a 'flash' animation for a given route.
+        """
 
-                    animations += flash_channels(path_channels, frame)
-                    last_transfer = frame
-                    break
-
-        animation_delay *= ANIMATION_DELAY_DECAY
-        animation_delay = int(max(animation_delay, ANIMATION_DELAY_MIN))
-        frame += animation_delay
-
-    with open('blender/animation.json', 'w') as animation_file:
-        json.dump(animations, animation_file, indent=2)
-
+        frame_offset = 0
+        for channel in channels:
+            frame_offset += ANIMATION_CHANNEL_HOP_DELAY
+            self.animations.append(Animation(
+                start_frame=self.frame + frame_offset,
+                animation_type='flash',
+                element_type='channel',
+                element_id=channel
+            ))
 
 if __name__ == '__main__':
-    run()
+    AnimationGenerator()
