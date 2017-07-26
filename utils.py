@@ -108,18 +108,25 @@ def calc3d_positions(cn):
     positions = []
     max_deposit = max(n.deposit_per_channel for n in cn.nodes)
     min_deposit = min(n.deposit_per_channel for n in cn.nodes)
-    _range = float(max_deposit - min_deposit)
-
-    def scale(node):
-        # high deposits to the center
-        factor = (node.deposit_per_channel - min_deposit) / _range  # 1 for max deposit
-        return 2 / (factor + 1)
+    range_ = float(max_deposit - min_deposit)
 
     for node in cn.nodes:
+        # Nodes are distributed on the round surface of a semi-sphere with the flat bit facing
+        # down. Light clients are positioned more toward the flat bottom while full nodes are
+        # positioned more toward the round top, reducing visual distance to the light clients.
+
+        # Put x,y on circle of radius 1.
         rad = 2 * math.pi * node.uid / float(cn.max_id)
         x, y = math.sin(rad), math.cos(rad)
-        s = scale(node)
-        positions.append([x, y, s])
+
+        # Height above ground (light client =~0, full node up to 1).
+        h = (node.deposit_per_channel - min_deposit) / range_
+
+        # Project x and y onto semi-sphere surface
+        r = math.sqrt(1 - h * h)
+        x *= r
+        y *= r
+        positions.append([x, y, h])
 
     edges = []
     for a_idx, node in enumerate(cn.nodes):
