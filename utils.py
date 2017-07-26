@@ -84,9 +84,7 @@ for w in (0, 0.1, 0.2, 0.4, 0.499, 0.5, 0.6, 0.9):
 
 
 def calc_postions(cn):
-    "helper to position nodes on a 2d plane as a circle"
-    from routing_sim import ChannelNetwork
-    # assert isinstance(cn, ChannelNetwork)
+    """helper to position nodes on a 2d plane as a circle"""
     positions = dict()
     max_deposit = max(n.deposit_per_channel for n in cn.nodes)
     min_deposit = min(n.deposit_per_channel for n in cn.nodes)
@@ -106,9 +104,7 @@ def calc_postions(cn):
 
 
 def calc3d_positions(cn):
-    "helper to position nodes in 3d as circles"
-    from routing_sim import ChannelNetwork
-    # assert isinstance(cn, ChannelNetwork)
+    """"helper to position nodes in 3d as circles"""
     positions = []
     max_deposit = max(n.deposit_per_channel for n in cn.nodes)
     min_deposit = min(n.deposit_per_channel for n in cn.nodes)
@@ -134,8 +130,6 @@ def calc3d_positions(cn):
 
 
 def path_to_edges(cn, path):
-    from routing_sim import ChannelNetwork
-    # assert isinstance(cn, ChannelNetwork)
     edges = []
     assert len(path) > 1
     for i in range(len(path) - 1):
@@ -162,13 +156,10 @@ class MyColorMap(matplotlib.colors.Colormap):
 
 
 def draw(cn, path=None, helper_highlight=None):
-    from routing_sim import ChannelNetwork
     from matplotlib.patches import Wedge
     from colorsys import hsv_to_rgb
-    # assert isinstance(cn, ChannelNetwork)
     edge_color = '#eeeeee'
     pos = calc_postions(cn)
-
 
     plt.clf()
     fig = plt.gcf()

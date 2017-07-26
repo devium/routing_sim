@@ -41,7 +41,7 @@ import networkx as nx
 from dijkstra_weighted import dijkstra_path
 import random
 import sys
-from utils import WeightedDistribution, draw3d, export_obj
+from utils import WeightedDistribution
 
 
 random.seed(43)
@@ -416,7 +416,6 @@ class ChannelNetwork(object):
         return None, None
 
 
-
 def test_basic_channel():
     cn = ChannelNetwork()
     a = Node(cn, 1)
@@ -469,7 +468,6 @@ def test_global_pathfinding(config, num_paths=10, value=2):
         else:
             print 'No direct path to target sector.'
         draw(cn, path, helper)
-
 
 
 def draw(cn, path=None, helper_highlight=None):

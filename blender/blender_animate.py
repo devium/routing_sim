@@ -3,7 +3,8 @@ from collections import namedtuple
 
 import bpy
 
-from settings import *
+from settings import ANIMATION_FILE, TRANSFER_COLORS, ANIMATION_LENGTH_SHOW, \
+    ANIMATION_LENGTH_FLASH, ANIMATION_LENGTH_HIDE
 
 
 def reset_progress():

@@ -1,6 +1,7 @@
 import bpy
 import json
-from settings import *
+from settings import NETWORK_FILE, SPHERES_NUM_SEGMENTS, SPHERES_NUM_RINGS, SPHERES_SIZE, \
+    CHANNELS_RADIUS, CHANNELS_RESOLUTION
 
 
 def clear_objects():
@@ -62,6 +63,7 @@ def run():
             obj = bpy.data.objects.new('Object.Network.Channel.{:06d}'.format(i), curve)
             bpy.context.scene.objects.link(obj)
             i += 1
+
 
 if __name__ == "__main__":
     run()

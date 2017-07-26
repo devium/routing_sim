@@ -33,8 +33,8 @@ max_messages_per_second_light_client = bps_light_client / message_size
 max_messages_per_second_full_node = bps_full_node / message_size
 
 # huddle size
-#max_transfers_per_huddle_per_second = max_messages_per_second_full_node / messages_per_transfer
-#max_users_per_huddle = max_transfers_per_huddle_per_second / transfers_per_user_per_second
+# max_transfers_per_huddle_per_second = max_messages_per_second_full_node / messages_per_transfer
+# max_users_per_huddle = max_transfers_per_huddle_per_second / transfers_per_user_per_second
 # huddles = full_nodes / max_users_per_huddle
 huddles = messages_per_second / max_messages_per_second_light_client
 max_users_per_huddle = users / huddles
@@ -46,7 +46,9 @@ print "concurrent_users", concurrent_users
 print "concurrent_light_clients_per_full_node", concurrent_light_clients_per_full_node
 print "messages per second", transfers_per_second * messages_per_transfer
 print "message_size", message_size
-print "max_messages_per_second_full_node", max_messages_per_second_full_node, max_messages_per_second_full_node * message_size
+print "max_messages_per_second_full_node",\
+    max_messages_per_second_full_node,\
+    max_messages_per_second_full_node * message_size
 print "max_messages_per_second_light_client", max_messages_per_second_light_client
 print "max_users_per_huddle", max_users_per_huddle
 print "full_nodes_per_huddle", full_nodes_per_huddle
