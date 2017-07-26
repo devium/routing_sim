@@ -27,7 +27,7 @@ def clear_node_groups(keep=None):
         bpy.data.node_groups.remove(node_group, do_unlink=True)
 
 
-def create_node_group(name):
+def create_empty_node_group(name):
     """
     Creates a new empty node group if it does not exist yet.
     """
@@ -36,8 +36,28 @@ def create_node_group(name):
     else:
         node_group = bpy.data.node_groups.new(name, 'ShaderNodeTree')
         output = node_group.nodes.new('NodeGroupOutput')
-        output.location = (300, 0)
         node_group.outputs.new('NodeSocketShader', 'Shader')
+        output.location = (300, 0)
+
+    return node_group
+
+
+def create_color_node_group(name):
+    """
+    Creates an empty node group with a color input.
+    """
+    if name in bpy.data.node_groups:
+        node_group = bpy.data.node_groups[name]
+    else:
+        node_group = bpy.data.node_groups.new(name, 'ShaderNodeTree')
+        input_ = node_group.nodes.new('NodeGroupInput')
+        output = node_group.nodes.new('NodeGroupOutput')
+
+        node_group.inputs.new('NodeSocketColor', 'Transfer Color')
+        node_group.outputs.new('NodeSocketShader', 'Shader')
+
+        input_.location = (-200, 0)
+        output.location = (300, 0)
 
     return node_group
 
@@ -50,7 +70,7 @@ def create_curve_node_group(name):
         node_group = bpy.data.node_groups[name]
     else:
         node_group = bpy.data.node_groups.new(name, 'ShaderNodeTree')
-        input = node_group.nodes.new('NodeGroupInput')
+        input_ = node_group.nodes.new('NodeGroupInput')
         combiner = node_group.nodes.new('ShaderNodeCombineRGB')
         curves = node_group.nodes.new('ShaderNodeRGBCurve')
         splitter = node_group.nodes.new('ShaderNodeSeparateRGB')
@@ -71,14 +91,14 @@ def create_curve_node_group(name):
         curves.mapping.update()
 
         links = node_group.links
-        links.new(combiner.inputs[0], input.outputs[0])
-        links.new(combiner.inputs[1], input.outputs[1])
+        links.new(combiner.inputs[0], input_.outputs[0])
+        links.new(combiner.inputs[1], input_.outputs[1])
         links.new(curves.inputs[1], combiner.outputs[0])
         links.new(splitter.inputs[0], curves.outputs[0])
         links.new(output.inputs[0], splitter.outputs[0])
         links.new(output.inputs[1], splitter.outputs[1])
 
-        input.location = (-600, 0)
+        input_.location = (-600, 0)
         combiner.location = (-400, 0)
         curves.location = (-200, 0)
         splitter.location = (100, 0)
@@ -133,12 +153,12 @@ def create_material(
     curve_group_node.node_tree = curve_node_group
 
     # Position nodes for visibility.
-    active_group_node.location = (-400, 200)
-    active_group_node.width = 240
     default_group_node.location = (-400, 300)
     default_group_node.width = 240
+    active_group_node.location = (-400, 200)
+    active_group_node.width = 240
     mix_active.location = (-100, 300)
-    hidden_group_node.location = (-400, 100)
+    hidden_group_node.location = (-400, 80)
     hidden_group_node.width = 240
     mix_hidden.location = (100, 300)
     curve_group_node.location = (-400, 500)
@@ -176,13 +196,16 @@ def shade_smooth(obj):
 
 
 def run():
-    node_group_names = [
+    empty_node_group_names = [
         'NodeGroup.Network.Node.Hidden',
         'NodeGroup.Network.Node.Default',
-        'NodeGroup.Network.Node.Active',
 
         'NodeGroup.Network.Channel.Hidden',
         'NodeGroup.Network.Channel.Default',
+    ]
+
+    color_node_group_names = [
+        'NodeGroup.Network.Node.Active',
         'NodeGroup.Network.Channel.Active'
     ]
 
@@ -196,10 +219,13 @@ def run():
 
     # Cleanup from previous calls.
     clear_materials()
-    clear_node_groups(keep=node_group_names+curve_node_group_names)
+    clear_node_groups(keep=empty_node_group_names+color_node_group_names+curve_node_group_names)
 
-    for node_group_name in node_group_names:
-        create_node_group(node_group_name)
+    for node_group_name in empty_node_group_names:
+        create_empty_node_group(node_group_name)
+
+    for color_group_name in color_node_group_names:
+        create_color_node_group(color_group_name)
 
     for curve_node_group_name in curve_node_group_names:
         create_curve_node_group(curve_node_group_name)

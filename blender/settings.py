@@ -9,3 +9,9 @@ ANIMATION_FILE = 'animation.json'
 ANIMATION_LENGTH_SHOW = 10
 ANIMATION_LENGTH_FLASH = 20
 ANIMATION_LENGTH_HIDE = 10
+
+TRANSFER_COLORS = [
+    (0.0, 0.5, 1.0, 1.0),  # Cyan
+    (1.0, 0.0, 0.5, 1.0),  # Magenta
+    (1.0, 0.5, 0.0, 1.0),  # Orange
+]

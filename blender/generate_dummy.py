@@ -89,7 +89,8 @@ def generate_animations(num_nodes, channels):
         'start_frame',
         'animation_type',
         'element_type',
-        'element_id'
+        'element_id',
+        'transfer_id'
     ])
 
     # Show nodes through random connections.
@@ -105,13 +106,15 @@ def generate_animations(num_nodes, channels):
         start_frame=0,
         animation_type='show',
         element_type='node',
-        element_id=first_node
+        element_id=first_node,
+        transfer_id=-1
     )
     animations.append(first_animation)
     hidden_nodes.remove(first_node)
     visible_nodes.append(first_node)
 
     last_frame = 0
+    transfer_id = 0
     while hidden_nodes or hidden_channels:
         # Find a node with a channel to a visible node.
         node = None
@@ -142,7 +145,8 @@ def generate_animations(num_nodes, channels):
                 start_frame=last_frame,
                 animation_type=type,
                 element_type='node',
-                element_id=node
+                element_id=node,
+                transfer_id=transfer_id if type == 'flash' else -1
             )
             animations.append(node_animation)
             if type == 'show':
@@ -153,12 +157,16 @@ def generate_animations(num_nodes, channels):
                 start_frame=last_frame,
                 animation_type=type,
                 element_type='channel',
-                element_id=channel
+                element_id=channel,
+                transfer_id=transfer_id if type == 'flash' else -1
             )
             animations.append(channel_animation)
             if type == 'show':
                 hidden_channels.remove(channel)
                 visible_channels.append(channel)
+
+        if type == 'flash':
+            transfer_id += 1
 
     return animations
 

@@ -1,7 +1,8 @@
 import json
+import random
 from collections import namedtuple
 
-from routing_sim import *
+from routing_sim import BaseNetworkConfiguration, ChannelNetwork
 from utils import calc3d_positions
 
 NUM_NODES = 100
@@ -10,7 +11,7 @@ ANIMATION_DELAY_DECAY = 0.99
 ANIMATION_DELAY_MIN = 3.0
 ANIMATION_CHANNEL_HOP_DELAY = 1
 TRANSFER_ATTEMPTS_MAX = 10
-TRANSFER_DELAY = 20
+TRANSFER_DELAY = 10
 TRANSFER_VALUE = 0.01
 NUM_CHANNELS_PER_POPUP = 2
 
@@ -18,7 +19,8 @@ Animation = namedtuple('Animation', [
     'start_frame',
     'animation_type',
     'element_type',
-    'element_id'
+    'element_id',
+    'transfer_id'
 ])
 
 
@@ -58,6 +60,7 @@ class AnimationGenerator(object):
         animation_delay = ANIMATION_DELAY_INITIAL
         self.frame = animation_delay
         self.last_transfer = 0
+        self.transfer_id = 0
         while self.hidden_channels:
             # Popup new channel that is connected to the existing network.
             self.create_channels(NUM_CHANNELS_PER_POPUP)
@@ -89,7 +92,8 @@ class AnimationGenerator(object):
                 start_frame=self.frame,
                 animation_type='show',
                 element_type='channel',
-                element_id=channel
+                element_id=channel,
+                transfer_id=-1
             ))
             self.hidden_channels.remove(channel)
             self.visible_channels.add(channel)
@@ -108,7 +112,8 @@ class AnimationGenerator(object):
                 start_frame=self.frame,
                 animation_type='show',
                 element_type='node',
-                element_id=node
+                element_id=node,
+                transfer_id=-1
             ))
             self.hidden_nodes.remove(node)
             self.visible_nodes.add(node)
@@ -160,6 +165,7 @@ class AnimationGenerator(object):
 
                 self.flash_channels(path_channels)
                 self.last_transfer = self.frame
+                self.transfer_id += 1
                 break
 
     def flash_channels(self, channels):
@@ -174,8 +180,10 @@ class AnimationGenerator(object):
                 start_frame=self.frame + frame_offset,
                 animation_type='flash',
                 element_type='channel',
-                element_id=channel
+                element_id=channel,
+                transfer_id=self.transfer_id
             ))
+
 
 if __name__ == '__main__':
     AnimationGenerator()
