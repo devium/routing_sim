@@ -41,8 +41,7 @@ import networkx as nx
 from dijkstra_weighted import dijkstra_path
 import random
 import sys
-from utils import WeightedDistribution
-
+from utils import WeightedDistribution, ParetoDistribution
 
 random.seed(43)
 sys.setrecursionlimit(100)
@@ -95,8 +94,8 @@ class ChannelView(object):
         return self.balance + self.deposit
 
     def __repr__(self):
-        return '<Channel({}:{} {}:{} balance:{}>'.format(self.this, self.deposit,
-                                                         self.other, self.partner_deposit)
+        return '<Channel({}:{} {}:{} balance:{}>'.format(self.this, self.deposit, self.other,
+                                                         self.partner_deposit, self.balance)
 
 
 class Node(object):
@@ -127,22 +126,27 @@ class Node(object):
         """
         geometrical distances with 1/3 of id space as max distance
         """
-        distances = [2 * self.cn.max_id / 2**i / 3
-                     for i in range(1, self.num_channels + 1)]
+        distances = [self.cn.max_id / 2**i / 3 for i in range(self.num_channels)]
         return [(self.uid + d) % self.cn.max_id for d in distances]
 
     def initiate_channels(self):
+        # Only accept nodes with a certain minimum deposit per channel.
         def node_filter(node):
             return bool(node.deposit_per_channel > self.min_expected_deposit)
 
+        # Find closest node to target node that fits the filter and isn't already connected to us.
         for target_id in self.targets:
-            for node_id in self.cn.get_closest_node_ids(target_id, filter=node_filter):
+            for attempt, node_id in enumerate(
+                    self.cn.get_closest_node_ids(target_id, filter=node_filter)
+            ):
                 other = self.cn.node_by_id[node_id]
                 accepted = other.connect_requested(self) and self.connect_requested(other)
                 if accepted:
                     self.cn.add_edge(self, other)
                     self.setup_channel(other)
                     other.setup_channel(self)
+                    break
+                if attempt > 10:
                     break
 
     def channel_view(self, other):
@@ -160,7 +164,7 @@ class Node(object):
         if other.deposit_per_channel < self.min_expected_deposit:
             # print "refused to connect", self, other, self.min_expected_deposit
             return
-        if other in self.partners:
+        if other.uid in self.partners:
             return
         if other == self:
             return
@@ -271,10 +275,11 @@ class ChannelNetwork(object):
 
     def generate_nodes(self, config):
         # full nodes
-        for i in range(config.fn_num_nodes):
+        for i in range(config.num_nodes):
             uid = random.randrange(self.max_id)
-            num_channels = int(config.fn_num_channel_dist.random())
-            deposit_per_channel = int(config.fn_deposit_dist.random())
+            fullness = config.fullness_dist.random()
+            num_channels = config.get_num_channels(fullness)
+            deposit_per_channel = config.get_channel_deposit(fullness)
             node = FullNode(self, uid, num_channels, deposit_per_channel)
             self.node_by_id[uid] = node
 
@@ -307,29 +312,15 @@ class ChannelNetwork(object):
         else:
             self.G.add_edge(B, A)
 
+    def ring_distance(self, node_a, node_b):
+        return min((node_a - node_b) % self.max_id, (node_b - node_a) % self.max_id)
+
     def get_closest_node_id(self, target_id, filter=None):
-        # prepare search space
-        if filter:
-            nodeids = [n for n in self.nodeids if filter(self.node_by_id[n])]
-        else:
-            nodeids = self.nodeids
-        # recursively split id space in half
-        start, end = 0, len(nodeids) - 1
-        while end - start > 1:
-            idx = start + (end - start) / 2
+        # Need to filter anyway, so O(n) min search is fine.
+        filtered_nodeids = (n for n in self.nodeids if not filter or filter(self.node_by_id[n]))
+        closest = min(filtered_nodeids, key=lambda n:self.ring_distance(n, target_id))
 
-            if nodeids[idx] > target_id:
-                end = idx
-            else:
-                start = idx
-        assert end - start <= 1, (end, start)
-
-        ds = abs(nodeids[start] - target_id)
-        de = abs(nodeids[end] - target_id)
-        idx = min((ds, start), (de, end))[1]  # FXIME, fails at id space end
-        # assert abs(nodeids[idx] -
-        #            target_id) <= abs(self._get_closest_node_id(target_id) - target_id)
-        return nodeids[idx]
+        return closest
 
     def get_closest_node_ids(self, target_id, filter=None):
         "generator"
@@ -346,7 +337,7 @@ class ChannelNetwork(object):
         lidx, lid = get_next(idx, inc=-1)
         ridx, rid = get_next(idx, inc=1)
         while True:
-            if abs(lid - target_id) < abs(lid - target_id):
+            if self.ring_distance(lid, target_id) < self.ring_distance(rid, target_id):
                 yield lid
                 lidx, lid = get_next(lidx, inc=-1)
             else:
@@ -433,7 +424,6 @@ def test_basic_channel():
 
 
 def setup_network(config):
-    assert isinstance(config, BaseNetworkConfiguration)
     cn = ChannelNetwork()
     cn.generate_nodes(config)
     cn.generate_helpers(config)
@@ -476,27 +466,25 @@ def draw(cn, path=None, helper_highlight=None):
     _draw(cn, path, helper_highlight)
 
 
-class BaseNetworkConfiguration(object):
-    # full nodes
-    fn_num_nodes = 100
-    fn_deposit_dist = WeightedDistribution(10,
-                                           weighted_values=[(100, 30), (1000, 20), (10000, 10)])
+class ParetoNetworkConfiguration(object):
+    num_nodes = 100
+    fullness_dist = ParetoDistribution(a=0.8, min_value=1, max_value=100)
 
-    fn_deposit_dist.smoothen(10)
-    fn_num_channel_dist = WeightedDistribution(5, weighted_values=[(10, 100)])
-    # light clients
-    lc_num_nodes = 10 * fn_num_nodes
-    lc_deposit_dist = WeightedDistribution(1, weighted_values=[(10, 90), (100, 10)])
-    lc_num_channel_dist = WeightedDistribution(1, weighted_values=[(1, 100)])
+    @staticmethod
+    def get_num_channels(fullness):
+        return int(fullness / 5 + 2)
+
+    @staticmethod
+    def get_channel_deposit(fullness):
+        return int(fullness * 5.0)
 
     # pathfinding helpers
     ph_num_helpers = 20
     ph_max_range_fr = 1/8.
     ph_min_range_fr = 1/16.
 
-    def __init__(self, fn_num_nodes):
-        self.fn_num_nodes = fn_num_nodes
-
+    def __init__(self, num_nodes):
+        self.num_nodes = num_nodes
 
 ##########################################################
 
@@ -504,4 +492,4 @@ class BaseNetworkConfiguration(object):
 if __name__ == '__main__':
     test_basic_channel()
     # test_basic_network()
-    test_global_pathfinding(BaseNetworkConfiguration(1000), num_paths=5, value=2)
+    test_global_pathfinding(ParetoNetworkConfiguration(1000), num_paths=5, value=2)

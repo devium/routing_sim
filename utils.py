@@ -1,14 +1,16 @@
-import random
 import collections
 import math
-import networkx as nx
+import numpy as np
+import random
+
 import matplotlib
 import matplotlib.pyplot as plt
+import networkx as nx
+
 plt.ion()  # interactive mode
 
 
 class WeightedDistribution(object):
-
     def __init__(self, min_, weighted_values=[]):
         """
         weighted_values needs to be a sample distribution
@@ -67,17 +69,24 @@ class WeightedDistribution(object):
             self.smoothen(num)
 
 
-wd = WeightedDistribution(0, weighted_values=[(50, 33), (200, 33), (400, 33)])
+class ParetoDistribution(object):
+    def __init__(self, a, min_value, max_value):
+        """
+        Pareto distribution according to
+        https://docs.scipy.org/doc/numpy/reference/generated/numpy.random.pareto.html
+        Values are in the range [min_value, inf) and `a` determines the shape.
 
-for w in (0, 0.1, 0.2, 0.4, 0.499, 0.5, 0.6, 0.9):
-    print w, wd.get_value(w)
+        A higher `a` causes a sharper drop-off in distribution (~= poorer network).
 
-print wd.weighted_values
-wd.smoothen(10)
-# print wd.weighted_values
+        This implementation is artificially bounded by max_value.
+        """
+        self.a = a
+        self.min_value = min_value
+        self.max_value = max_value
+        np.random.seed(0)
 
-for w in (0, 0.1, 0.2, 0.4, 0.499, 0.5, 0.6, 0.9):
-    print w, wd.get_value(w)
+    def random(self):
+        return min(np.random.pareto(self.a) + self.min_value, self.max_value)
 
 
 # DRAWING helpers ##########################################
@@ -122,18 +131,19 @@ def calc3d_positions(cn):
         # Height above ground (light client =~0, full node up to 1).
         h = (node.deposit_per_channel - min_deposit) / range_
 
-        # Project x and y onto semi-sphere surface
-        r = math.sqrt(1 - h * h)
+        # Project x and y onto semi-sphere surface.
+        # Bound radius so capped nodes don't accumulate at the top.
+        r = max(math.sqrt(1 - h * h), 0.05)
         x *= r
         y *= r
         positions.append([x, y, h])
 
-    edges = []
+    edges = set()
     for a_idx, node in enumerate(cn.nodes):
         for c in node.channels:
             b_idx = cn.nodeids.index(c.partner)
-            edges.append((a_idx, b_idx))
-    return positions, edges
+            edges.add(frozenset({a_idx, b_idx}))
+    return positions, list(edges)
 
 
 def path_to_edges(cn, path):
@@ -149,7 +159,6 @@ def path_to_edges(cn, path):
 
 
 class MyColorMap(matplotlib.colors.Colormap):
-
     def __call__(self, X, alpha=None, bytes=False):
         if isinstance(X, collections.Iterable):
             return [self._map(x) for x in X]

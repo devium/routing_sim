@@ -2,7 +2,7 @@ import json
 import random
 from collections import namedtuple
 
-from routing_sim import BaseNetworkConfiguration, ChannelNetwork
+from routing_sim import ParetoNetworkConfiguration, ChannelNetwork
 from utils import calc3d_positions
 
 NUM_NODES = 100
@@ -27,12 +27,12 @@ Animation = namedtuple('Animation', [
 class AnimationGenerator(object):
     def __init__(self):
         # Export final network configuration.
-        config = BaseNetworkConfiguration(NUM_NODES)
+        config = ParetoNetworkConfiguration(NUM_NODES)
         self.cn = ChannelNetwork()
         self.cn.generate_nodes(config)
         self.cn.connect_nodes()
+
         nodes, self.channel_topology = calc3d_positions(self.cn)
-        self.channel_topology = {frozenset(channel) for channel in self.channel_topology}
         self.channel_topology = [tuple(channel) for channel in self.channel_topology]
 
         with open('blender/network.json', 'w') as network_file:

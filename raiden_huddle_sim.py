@@ -67,7 +67,7 @@ thoughts:
 
 huddles should be local on messaging and transfers
 
-"""
+
 Message requirements:
     Doing transfers with channel partners:
     - ideally direct connections(long lasting) w / channel partners, w/o them learning their endpoints
@@ -94,7 +94,7 @@ Messaging:
     - even channel partners don't learn each others endpoints
 
 
-"""
+
 
 
 
