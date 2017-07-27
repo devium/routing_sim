@@ -92,6 +92,14 @@ class Animator:
                 color_idx = animation.transfer_id % len(self.transfer_colors)
                 transfer_color_input.default_value = self.transfer_colors[color_idx]
 
+        mats = (mat for mat in bpy.data.materials if 'Material.Network' in mat.name)
+        for mat in mats:
+            obj = bpy.data.objects['Object.Network' + mat.name[16:]]
+            hidden_progress_input = mat.node_tree.nodes['Group.Curve'].inputs[0]
+            hide = hidden_progress_input.default_value > 0.999
+            obj.hide = hide
+            obj.hide_render = hide
+
 
 def animate(animation, progress):
     """
