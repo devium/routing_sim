@@ -41,7 +41,7 @@ import networkx as nx
 from dijkstra_weighted import dijkstra_path
 import random
 import sys
-from utils import WeightedDistribution, ParetoDistribution
+from utils import WeightedDistribution, ParetoDistribution, CircleDistribution
 
 random.seed(43)
 sys.setrecursionlimit(100)
@@ -470,9 +470,10 @@ def draw(cn, path=None, helper_highlight=None):
     _draw(cn, path, helper_highlight)
 
 
-class ParetoNetworkConfiguration(object):
+class BaseNetworkConfiguration(object):
+    num_nodes = 1000
+    min_fullness = 0
     max_fullness = 10000
-    fullness_dist = ParetoDistribution(a=0.3, min_value=0, max_value=max_fullness)
 
     def get_num_channels(self, fullness):
         """
@@ -487,7 +488,7 @@ class ParetoNetworkConfiguration(object):
         Linear min/max mapping of fullness to deposit per channel.
         """
         min_deposit = 10
-        max_deposit = 100
+        max_deposit = 80
         return int((max_deposit - min_deposit) * fullness / self.max_fullness + min_deposit)
 
     # pathfinding helpers
@@ -495,8 +496,26 @@ class ParetoNetworkConfiguration(object):
     ph_max_range_fr = 1/8.
     ph_min_range_fr = 1/16.
 
+
+class ParetoNetworkConfiguration(BaseNetworkConfiguration):
     def __init__(self, num_nodes):
         self.num_nodes = num_nodes
+        self.fullness_dist = ParetoDistribution(
+            a=0.3,
+            min_value=self.min_fullness,
+            max_value=self.max_fullness
+        )
+
+
+class SemisphereNetworkConfiguration(BaseNetworkConfiguration):
+    def __init__(self, num_nodes, min_fullness=0, max_fullness=1000):
+        self.num_nodes = num_nodes
+        self.min_fullness = min_fullness
+        self.max_fullness = max_fullness
+        self.fullness_dist = CircleDistribution(
+            min_value=self.min_fullness,
+            max_value=self.max_fullness
+        )
 
 ##########################################################
 

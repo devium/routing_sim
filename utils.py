@@ -7,6 +7,8 @@ import matplotlib
 import matplotlib.pyplot as plt
 import networkx as nx
 
+from scipy.stats import semicircular
+
 plt.ion()  # interactive mode
 
 
@@ -87,6 +89,17 @@ class ParetoDistribution(object):
 
     def random(self):
         return min(np.random.pareto(self.a) + self.min_value, self.max_value)
+
+
+class CircleDistribution(object):
+    def __init__(self, min_value, max_value):
+        """Quarter-circle distribution."""
+        self.min_value = min_value
+        self.max_value = max_value
+        np.random.seed(0)
+
+    def random(self):
+        return (self.max_value - self.min_value) * abs(semicircular.rvs()) + self.min_value
 
 
 # DRAWING helpers ##########################################

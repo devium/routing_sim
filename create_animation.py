@@ -2,7 +2,7 @@ import json
 import random
 from collections import namedtuple
 
-from routing_sim import ParetoNetworkConfiguration, ChannelNetwork
+from routing_sim import SemisphereNetworkConfiguration, ChannelNetwork
 from utils import calc3d_positions
 
 NUM_NODES = 1000
@@ -13,7 +13,7 @@ ANIMATION_CHANNEL_HOP_DELAY = 1
 TRANSFER_ATTEMPTS_MAX = 10
 TRANSFER_DELAY = 10
 TRANSFER_VALUE = 0.01
-NUM_CHANNELS_PER_POPUP = 2
+NUM_CHANNELS_PER_POPUP = 8
 
 Animation = namedtuple('Animation', [
     'start_frame',
@@ -27,7 +27,7 @@ Animation = namedtuple('Animation', [
 class AnimationGenerator(object):
     def __init__(self):
         # Export final network configuration.
-        config = ParetoNetworkConfiguration(NUM_NODES)
+        config = SemisphereNetworkConfiguration(NUM_NODES, 10, 1000)
         self.cn = ChannelNetwork()
         self.cn.generate_nodes(config)
         self.cn.connect_nodes()
