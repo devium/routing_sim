@@ -8,7 +8,6 @@ from settings import ANIMATION_FILE, TRANSFER_COLORS, ANIMATION_LENGTH_SHOW, \
 
 
 def reset_progress():
-    bpy.context.scene.frame_set(0)
     network_mats = [mat for mat in bpy.data.materials if 'Material.Network.' in mat.name]
     for mat in network_mats:
         curve_group = mat.node_tree.nodes['Group.Curve']
@@ -22,7 +21,7 @@ class Animator:
             animations = json.load(animation_file)
 
         Animation = namedtuple('Animation', [
-            'start_frame',
+            'time',
             'animation_type',
             'element_type',
             'element_id',
@@ -50,21 +49,21 @@ class Animator:
         bpy.app.handlers.frame_change_pre.append(self.on_frame)
 
     def on_frame(self, scene):
-        frame = scene.frame_current
-        print('---- Frame {} ----'.format(frame))
+        time = scene.frame_current / bpy.context.scene.render.fps
+        print('---- Frame {}, Time: {} ----'.format(scene.frame_current, time))
+
+        reset_progress()
 
         # Find all current animations.
         current_animations = [
-            animation for animation in self.animations
-            if animation.start_frame <= frame <=
-            animation.start_frame + self.animation_type_to_length[animation.animation_type]
+            animation for animation in self.animations if animation.time <= time
         ]
 
         for animation in current_animations:
             # Compute animation progress.
             animation_length = self.animation_type_to_length[animation.animation_type]
-            animation_frame = frame - animation.start_frame
-            animation_progress = animation_frame / animation_length
+            animation_progress = (time - animation.time) / animation_length
+            animation_progress = max(0.0, min(1.0, animation_progress))
 
             print(
                 animation.animation_type,

@@ -41,7 +41,7 @@ import networkx as nx
 from dijkstra_weighted import dijkstra_path
 import random
 import sys
-from utils import WeightedDistribution, ParetoDistribution, CircleDistribution
+from utils import ParetoDistribution, CircleDistribution
 
 random.seed(43)
 sys.setrecursionlimit(100)

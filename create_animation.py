@@ -5,18 +5,25 @@ from collections import namedtuple
 from routing_sim import SemisphereNetworkConfiguration, ChannelNetwork
 from utils import calc3d_positions
 
-NUM_NODES = 1000
-ANIMATION_DELAY_INITIAL = 7.0
-ANIMATION_DELAY_DECAY = 0.99
-ANIMATION_DELAY_MIN = 3.0
-ANIMATION_CHANNEL_HOP_DELAY = 1
+NUM_NODES = 200
+
+# Base unit = seconds.
+ANIMATION_LENGTH = 30.0
+CHANNEL_POPUP_DELAY_BASE = 0.1
+CHANNEL_POPUP_DELAY_DECREASE = 0.005
+CHANNEL_POPUP_DELAY_MIN = 0.01
+TRANSFER_DELAY_BASE = 0.6
+TRANSFER_DELAY_DECREASE = 0.03
+TRANSFER_DELAY_MIN = 0.005
+TRANSFER_HOP_DELAY = 0.1
+SIMULATION_STEP_SIZE = 0.01
+
 TRANSFER_ATTEMPTS_MAX = 10
-TRANSFER_DELAY = 10
-TRANSFER_VALUE = 0.01
-NUM_CHANNELS_PER_POPUP = 8
+TRANSFER_VALUE = 1
+
 
 Animation = namedtuple('Animation', [
-    'start_frame',
+    'time',
     'animation_type',
     'element_type',
     'element_id',
@@ -56,25 +63,35 @@ class AnimationGenerator(object):
         random.seed(43)
 
         # Generate node popup and channel transfer animations.
-        self.frame = 0
         self.animations = []
-        self.create_channels(1, connected_only=False)
-
-        animation_delay = ANIMATION_DELAY_INITIAL
-        self.frame = animation_delay
-        self.last_transfer = 0
         self.transfer_id = 0
-        while self.hidden_channels:
-            # Popup new channel that is connected to the existing network.
-            self.create_channels(NUM_CHANNELS_PER_POPUP)
+        self.time = 0.0
+        last_popup = 0.0
+        last_transfer = 0.0
+        last_speedup = 0.0
+        channel_popup_delay = CHANNEL_POPUP_DELAY_BASE
+        transfer_delay = TRANSFER_DELAY_BASE
+        while self.time < ANIMATION_LENGTH:
+            while self.time - last_speedup >= 1.0:
+                last_speedup += 1.0
+                channel_popup_delay -= CHANNEL_POPUP_DELAY_DECREASE
+                channel_popup_delay = max(channel_popup_delay, CHANNEL_POPUP_DELAY_MIN)
+                transfer_delay -= TRANSFER_DELAY_DECREASE
+                transfer_delay = max(transfer_delay, TRANSFER_DELAY_MIN)
 
-            if self.frame - self.last_transfer >= TRANSFER_DELAY:
-                # Create new transfer.
+            while self.hidden_channels and self.time - last_popup >= channel_popup_delay:
+                last_popup += channel_popup_delay
+                self.create_channels(1, connected_only=bool(self.animations))
+
+            while len(self.visible_nodes) >= 2 and self.time - last_transfer >= transfer_delay:
+                last_transfer += transfer_delay
                 self.create_transfer()
 
-            animation_delay *= ANIMATION_DELAY_DECAY
-            animation_delay = max(animation_delay, ANIMATION_DELAY_MIN)
-            self.frame += int(animation_delay)
+            self.time += SIMULATION_STEP_SIZE
+
+        print('Last channel popup at {}'.format(last_popup))
+        print('Final channel popup delay: {}'.format(channel_popup_delay))
+        print('Final transfer delay: {}'.format(transfer_delay))
 
         with open('blender/animation.json', 'w') as animation_file:
             json.dump(self.animations, animation_file, indent=2)
@@ -92,7 +109,7 @@ class AnimationGenerator(object):
             nodes = set(self.channel_topology[channel])
             self.popup_nodes(nodes)
             self.animations.append(Animation(
-                start_frame=self.frame,
+                time=self.time,
                 animation_type='show',
                 element_type='channel',
                 element_id=channel,
@@ -112,7 +129,7 @@ class AnimationGenerator(object):
 
         for node in nodes:
             self.animations.append(Animation(
-                start_frame=self.frame,
+                time=self.time,
                 animation_type='show',
                 element_type='node',
                 element_id=node,
@@ -167,7 +184,6 @@ class AnimationGenerator(object):
                     path_channels.append(hop_channels[0])
 
                 self.flash_channels(path_channels)
-                self.last_transfer = self.frame
                 self.transfer_id += 1
                 break
 
@@ -176,11 +192,11 @@ class AnimationGenerator(object):
         Creates a 'flash' animation for a given route.
         """
 
-        frame_offset = 0
+        time_offset = 0
         for channel in channels:
-            frame_offset += ANIMATION_CHANNEL_HOP_DELAY
+            time_offset += TRANSFER_HOP_DELAY
             self.animations.append(Animation(
-                start_frame=self.frame + frame_offset,
+                time=self.time + time_offset,
                 animation_type='flash',
                 element_type='channel',
                 element_id=channel,
