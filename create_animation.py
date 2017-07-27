@@ -183,18 +183,33 @@ class AnimationGenerator(object):
                     assert len(hop_channels) == 1
                     path_channels.append(hop_channels[0])
 
-                self.flash_channels(path_channels)
+                self.flash_route(path_channels)
                 self.transfer_id += 1
                 break
 
-    def flash_channels(self, channels):
+    def flash_node(self, node, time_offset=0):
+        """
+        Creates a 'flash' animation for the given node.
+        """
+        self.animations.append(Animation(
+            time=self.time + time_offset,
+            animation_type='flash',
+            element_type='node',
+            element_id=node,
+            transfer_id=self.transfer_id
+        ))
+
+    def flash_route(self, channels):
         """
         Creates a 'flash' animation for a given route.
         """
 
         time_offset = 0
+        if channels:
+            self.flash_node(self.channel_topology[channels[0]][0], time_offset)
         for channel in channels:
             time_offset += TRANSFER_HOP_DELAY
+            self.flash_node(self.channel_topology[channel][1], time_offset)
             self.animations.append(Animation(
                 time=self.time + time_offset,
                 animation_type='flash',
