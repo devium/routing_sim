@@ -147,6 +147,10 @@ class Node(object):
                     other.setup_channel(self)
                     break
                 if attempt > 10:
+                    print(
+                        'Failed to find a target node for node {} at {}.'
+                        .format(self.uid, target_id)
+                    )
                     break
 
     def channel_view(self, other):
@@ -467,16 +471,24 @@ def draw(cn, path=None, helper_highlight=None):
 
 
 class ParetoNetworkConfiguration(object):
-    num_nodes = 100
-    fullness_dist = ParetoDistribution(a=0.8, min_value=1, max_value=100)
+    max_fullness = 10000
+    fullness_dist = ParetoDistribution(a=0.3, min_value=0, max_value=max_fullness)
 
-    @staticmethod
-    def get_num_channels(fullness):
-        return int(fullness / 5 + 2)
+    def get_num_channels(self, fullness):
+        """
+        Linear min/max mapping of fullness to channel count.
+        """
+        min_channels = 2
+        max_channels = 5
+        return int((max_channels - min_channels) * fullness / self.max_fullness + min_channels)
 
-    @staticmethod
-    def get_channel_deposit(fullness):
-        return int(fullness * 5.0)
+    def get_channel_deposit(self, fullness):
+        """
+        Linear min/max mapping of fullness to deposit per channel.
+        """
+        min_deposit = 10
+        max_deposit = 100
+        return int((max_deposit - min_deposit) * fullness / self.max_fullness + min_deposit)
 
     # pathfinding helpers
     ph_num_helpers = 20

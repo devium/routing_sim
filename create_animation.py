@@ -5,7 +5,7 @@ from collections import namedtuple
 from routing_sim import ParetoNetworkConfiguration, ChannelNetwork
 from utils import calc3d_positions
 
-NUM_NODES = 100
+NUM_NODES = 1000
 ANIMATION_DELAY_INITIAL = 7.0
 ANIMATION_DELAY_DECAY = 0.99
 ANIMATION_DELAY_MIN = 3.0
@@ -47,7 +47,10 @@ class AnimationGenerator(object):
         self.visible_nodes = set()
         self.visible_channels = set()
         for i, channel in enumerate(self.channel_topology):
-            self.cn.G.remove_edge(self.cn.nodes[channel[0]], self.cn.nodes[channel[1]])
+            if self.cn.nodes[channel[0]] in self.cn.G.edge:
+                self.cn.G.remove_edge(self.cn.nodes[channel[0]], self.cn.nodes[channel[1]])
+            else:
+                self.cn.G.remove_edge(self.cn.nodes[channel[1]], self.cn.nodes[channel[0]])
             self.hidden_channels.add(i)
 
         random.seed(43)
