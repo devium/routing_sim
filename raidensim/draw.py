@@ -1,51 +1,10 @@
-import collections
 import math
-import numpy as np
 
-import matplotlib
-import matplotlib.pyplot as plt
 import networkx as nx
-
-from scipy.stats import semicircular
-
-plt.ion()  # interactive mode
+from matplotlib import pyplot as plt
 
 
-class ParetoDistribution(object):
-    def __init__(self, a, min_value, max_value):
-        """
-        Pareto distribution according to
-        https://docs.scipy.org/doc/numpy/reference/generated/numpy.random.pareto.html
-        Values are in the range [min_value, inf) and `a` determines the shape.
-
-        A higher `a` causes a sharper drop-off in distribution (~= poorer network).
-
-        This implementation is artificially bounded by max_value.
-        """
-        self.a = a
-        self.min_value = min_value
-        self.max_value = max_value
-        np.random.seed(0)
-
-    def random(self):
-        return min(np.random.pareto(self.a) + self.min_value, self.max_value)
-
-
-class CircleDistribution(object):
-    def __init__(self, min_value, max_value):
-        """Quarter-circle distribution."""
-        self.min_value = min_value
-        self.max_value = max_value
-        np.random.seed(0)
-
-    def random(self):
-        return (self.max_value - self.min_value) * abs(semicircular.rvs()) + self.min_value
-
-
-# DRAWING helpers ##########################################
-
-
-def calc_postions(cn):
+def calc_positions(cn):
     """helper to position nodes on a 2d plane as a circle"""
     positions = dict()
     max_deposit = max(n.deposit_per_channel for n in cn.nodes)
@@ -111,24 +70,11 @@ def path_to_edges(cn, path):
     return edges
 
 
-class MyColorMap(matplotlib.colors.Colormap):
-    def __call__(self, X, alpha=None, bytes=False):
-        if isinstance(X, collections.Iterable):
-            return [self._map(x) for x in X]
-        return self._map(X)
-
-    def _map(self, X):
-        if X == 1:
-            return (1, 0, 0, 1)
-        else:
-            return (0.5, 0.5, 0.5, 0.1)
-
-
-def draw(cn, path=None, helper_highlight=None):
+def draw2d(cn, path=None, helper_highlight=None):
     from matplotlib.patches import Wedge
     from colorsys import hsv_to_rgb
     edge_color = '#eeeeee'
-    pos = calc_postions(cn)
+    pos = calc_positions(cn)
 
     plt.clf()
     fig = plt.gcf()
@@ -148,25 +94,8 @@ def draw(cn, path=None, helper_highlight=None):
         alpha = 0.6 if helper == helper_highlight else 0.2
         ax.add_artist(Wedge((0, 0), radius, sangle, eangle, color=color, alpha=alpha))
 
-    nx.draw(cn.G, pos, edge_color=edge_color, node_size=1, ax=ax)
+    nx.draw_networkx(cn.G, pos, edge_color=edge_color, node_size=1, with_labels=False, ax=ax)
     if path:
         nx.draw_networkx_edges(cn.G, pos, edgelist=path_to_edges(cn, path), edge_color='r')
 
     plt.show()
-    raw_input('press any key')
-
-
-def draw3d(cn):
-    from doplotly import draw
-    node_coords, edges = calc3d_positions(cn)
-    print len(edges), "edges"
-    draw(node_coords, edges)
-
-
-def export_obj(cn):
-    node_coords, edges = calc3d_positions(cn)
-    fh = open('blender_export.obj', mode='w')
-    for x, y, z in node_coords:
-        fh.write('v {} {} {}\n'.format(x, y, z))
-    for a_idx, b_idx in edges:
-        fh.write('f {} {}\n'.format(a_idx + 1, b_idx + 1))

@@ -103,8 +103,12 @@ def test_global_pathfinding(config, num_paths=10, value=2):
         draw(cn, path, helper)
 
 
+def test_balancing(config):
+    pass
+
+
 def draw(cn, path=None, helper_highlight=None):
-    from raidensim.utils import draw as _draw
+    from raidensim.draw import draw2d as _draw
     assert isinstance(cn, ChannelNetwork)
     _draw(cn, path, helper_highlight)
 

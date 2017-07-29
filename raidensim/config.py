@@ -1,4 +1,4 @@
-from raidensim.utils import ParetoDistribution, CircleDistribution
+from raidensim.dist import ParetoDistribution, CircleDistribution
 
 
 class BaseNetworkConfiguration(object):

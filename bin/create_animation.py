@@ -4,7 +4,7 @@ from collections import namedtuple
 
 from raidensim.config import SemisphereNetworkConfiguration
 from raidensim.network.channel_network import ChannelNetwork
-from raidensim.utils import calc3d_positions
+from raidensim.draw import calc3d_positions
 
 NUM_NODES = 200
 
