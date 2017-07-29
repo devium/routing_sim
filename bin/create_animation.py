@@ -2,8 +2,9 @@ import json
 import random
 from collections import namedtuple
 
-from routing_sim import SemisphereNetworkConfiguration, ChannelNetwork
-from utils import calc3d_positions
+from raidensim.config import SemisphereNetworkConfiguration
+from raidensim.network.channel_network import ChannelNetwork
+from raidensim.utils import calc3d_positions
 
 NUM_NODES = 200
 
@@ -20,6 +21,8 @@ SIMULATION_STEP_SIZE = 0.01
 
 TRANSFER_ATTEMPTS_MAX = 10
 TRANSFER_VALUE = 1
+
+OUTDIR = 'blender/'
 
 
 Animation = namedtuple('Animation', [
@@ -42,7 +45,7 @@ class AnimationGenerator(object):
         nodes, self.channel_topology = calc3d_positions(self.cn)
         self.channel_topology = [tuple(channel) for channel in self.channel_topology]
 
-        with open('blender/network.json', 'w') as network_file:
+        with open(OUTDIR + 'network.json', 'w') as network_file:
             json.dump({'nodes': nodes, 'channels': self.channel_topology}, network_file, indent=2)
 
         # Revert simulation back to empty network. Build animations from there.
@@ -97,7 +100,7 @@ class AnimationGenerator(object):
         print('Final transfer delay: {}'.format(transfer_delay))
         print('Max transfer frequency reached at {}'.format(max_transfers_reached))
 
-        with open('blender/animation.json', 'w') as animation_file:
+        with open(OUTDIR + 'animation.json', 'w') as animation_file:
             json.dump(self.animations, animation_file, indent=2)
 
     def popup_channels(self, channels):

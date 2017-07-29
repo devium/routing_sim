@@ -1,7 +1,6 @@
 import collections
 import math
 import numpy as np
-import random
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -10,65 +9,6 @@ import networkx as nx
 from scipy.stats import semicircular
 
 plt.ion()  # interactive mode
-
-
-class WeightedDistribution(object):
-    def __init__(self, min_, weighted_values=[]):
-        """
-        weighted_values needs to be a sample distribution
-        [(max_value, weight), (max_value, weight), ...]
-
-        """
-        self.weighted_values = []
-        for maxval, w in sorted(weighted_values):
-            self.weighted_values.append((float(w), min_, maxval))
-            min_ = maxval
-        self.total_weight = sum(x[0] for x in self.weighted_values)
-
-    def get_value(self, rand):
-        assert 0 <= rand < 1
-        rand *= self.total_weight
-        seen = 0
-        for w, minval, maxval in self.weighted_values:
-            if rand > seen + w:
-                seen += w
-                continue
-            # calc value in value range
-            value_range = maxval - minval
-            part = (rand - seen) / w
-            val = minval + part * value_range
-            return val
-
-    def random(self):
-        return self.get_value(random.random())
-
-    def smoothen(self, num=1):
-        """
-        smoothen the distribution by adding intermediary ranges
-        """
-        # add an element between neighbours
-        cut = 0.25
-        i = 0
-        while i < len(self.weighted_values) - 1:
-            a_w, a_min, a_max = self.weighted_values[i]
-            b_w, b_min, b_max = self.weighted_values[i + 1]
-            c_w = a_w * 0.25 + b_w * 0.25
-            c_min = (a_max - a_min) * (1 - cut) + a_min
-            c_max = (b_max - b_min) * cut + b_min
-            a_w = (1 - cut) * a_w
-            a_max = c_min
-            b_w = (1 - cut) * b_w
-            b_min = c_max
-
-            # add c
-            self.weighted_values[i] = a_w, a_min, a_max
-            self.weighted_values[i + 1] = b_w, b_min, b_max
-            self.weighted_values.insert(i + 1, (c_w, c_min, c_max))
-            i += 2
-        assert sum(x[0] for x in self.weighted_values) == self.total_weight
-        num -= 1
-        if num:
-            self.smoothen(num)
 
 
 class ParetoDistribution(object):
