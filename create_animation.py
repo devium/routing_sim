@@ -10,10 +10,10 @@ NUM_NODES = 200
 # Base unit = seconds.
 ANIMATION_LENGTH = 30.0
 CHANNEL_POPUP_DELAY_BASE = 0.1
-CHANNEL_POPUP_DELAY_DECREASE = 0.005
+CHANNEL_POPUP_DELAY_DECAY = 0.94
 CHANNEL_POPUP_DELAY_MIN = 0.01
 TRANSFER_DELAY_BASE = 0.6
-TRANSFER_DELAY_DECREASE = 0.03
+TRANSFER_DELAY_DECAY = 0.84
 TRANSFER_DELAY_MIN = 0.005
 TRANSFER_HOP_DELAY = 0.1
 SIMULATION_STEP_SIZE = 0.01
@@ -66,18 +66,21 @@ class AnimationGenerator(object):
         self.animations = []
         self.transfer_id = 0
         self.time = 0.0
+        last_speedup = 0.0
         last_popup = 0.0
         last_transfer = 0.0
-        last_speedup = 0.0
+        max_transfers_reached = None
         channel_popup_delay = CHANNEL_POPUP_DELAY_BASE
         transfer_delay = TRANSFER_DELAY_BASE
         while self.time < ANIMATION_LENGTH:
-            while self.time - last_speedup >= 1.0:
+            if self.time - last_speedup > 1.0:
                 last_speedup += 1.0
-                channel_popup_delay -= CHANNEL_POPUP_DELAY_DECREASE
+                channel_popup_delay *= CHANNEL_POPUP_DELAY_DECAY
                 channel_popup_delay = max(channel_popup_delay, CHANNEL_POPUP_DELAY_MIN)
-                transfer_delay -= TRANSFER_DELAY_DECREASE
+                transfer_delay *= TRANSFER_DELAY_DECAY
                 transfer_delay = max(transfer_delay, TRANSFER_DELAY_MIN)
+                if not max_transfers_reached and transfer_delay == TRANSFER_DELAY_MIN:
+                    max_transfers_reached = self.time
 
             while self.hidden_channels and self.time - last_popup >= channel_popup_delay:
                 last_popup += channel_popup_delay
@@ -92,6 +95,7 @@ class AnimationGenerator(object):
         print('Last channel popup at {}'.format(last_popup))
         print('Final channel popup delay: {}'.format(channel_popup_delay))
         print('Final transfer delay: {}'.format(transfer_delay))
+        print('Max transfer frequency reached at {}'.format(max_transfers_reached))
 
         with open('blender/animation.json', 'w') as animation_file:
             json.dump(self.animations, animation_file, indent=2)
