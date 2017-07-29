@@ -2,6 +2,7 @@ import math
 
 import networkx as nx
 from matplotlib import pyplot as plt
+from collections import defaultdict
 
 
 def calc_positions(cn):
@@ -102,4 +103,30 @@ def draw2d(cn, path=None, helper_highlight=None):
     if path:
         nx.draw_networkx_edges(cn.G, pos, edgelist=path_to_edges(cn, path), edge_color='r')
 
+    plt.show()
+
+
+def plot_channel_capacities(cn, num_bins=50):
+    capacities = [cv.capacity for node in cn.nodes for cv in node.channels.values()]
+    plt.clf()
+    plt.hist(capacities, bins=num_bins, normed=True)
+    plt.xlabel('Channel capacity')
+    plt.ylabel('Distribution')
+    plt.grid(True)
+    plt.show()
+
+
+def plot_channel_imbalances(cn, num_bins=50):
+    channel_to_imbalance = defaultdict(int)
+    for cv in (cv for node in cn.nodes for cv in node.channels.values()):
+        sign = 1 if cv.this > cv.other else -1
+        channel_to_imbalance[frozenset([cv.this, cv.other])] += sign * cv.capacity
+
+    imbalances = [abs(imbalance) for imbalance in channel_to_imbalance.values()]
+
+    plt.clf()
+    plt.hist(imbalances, bins=num_bins, normed=True)
+    plt.xlabel('Channel imbalance')
+    plt.ylabel('Distribution')
+    plt.grid(True)
     plt.show()

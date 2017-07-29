@@ -1,5 +1,5 @@
 class ChannelView(object):
-    """"Channel from the perspective of this."""
+    """Channel from the perspective of this."""
 
     def __init__(self, this_node, other_node):
         assert this_node != other_node

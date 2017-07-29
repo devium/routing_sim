@@ -47,10 +47,10 @@ class Animator:
 
         bpy.app.handlers.frame_change_pre.clear()
         bpy.app.handlers.frame_change_pre.append(self.on_frame)
+        self.on_frame(bpy.context.scene)
 
     def on_frame(self, scene):
-        time = scene.frame_current / bpy.context.scene.render.fps
-        print('---- Frame {}, Time: {} ----'.format(scene.frame_current, time))
+        time = scene.frame_current / scene.render.fps
 
         reset_progress()
 
@@ -64,13 +64,6 @@ class Animator:
             animation_length = self.animation_type_to_length[animation.animation_type]
             animation_progress = (time - animation.time) / animation_length
             animation_progress = max(0.0, min(1.0, animation_progress))
-
-            print(
-                animation.animation_type,
-                animation.element_type,
-                animation.element_id,
-                animation_progress
-            )
 
             # Get references to element's material shader mixers.
             mat = bpy.data.materials['Material.Network.{}.{:06d}'.format(

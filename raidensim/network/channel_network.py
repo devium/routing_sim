@@ -43,8 +43,10 @@ class ChannelNetwork(object):
             self.helpers.append(PathFindingHelper(self, range_, center))
 
     def connect_nodes(self):
-        for node in self.nodes[:]:
+        for node in self.nodes:
             node.initiate_channels()
+
+        for node in self.nodes:
             if not node.channels:
                 print "not connected", node
                 self.nodeids.remove(node.uid)
@@ -66,7 +68,7 @@ class ChannelNetwork(object):
     def get_closest_node_id(self, target_id, filter=None):
         # Need to filter anyway, so O(n) min search is fine.
         filtered_nodeids = (n for n in self.nodeids if not filter or filter(self.node_by_id[n]))
-        closest = min(filtered_nodeids, key=lambda n:self.ring_distance(n, target_id))
+        closest = min(filtered_nodeids, key=lambda n: self.ring_distance(n, target_id))
 
         return closest
 
@@ -99,10 +101,8 @@ class ChannelNetwork(object):
         def cost_func_fast(a, b, _account):
             # this func should be as fast as possible, as it's called often
             # don't alloc memory
-            if a.uid < b.uid:
-                capacity = _account['balance'] + _account[a.uid]
-            else:
-                capacity = - _account['balance'] + _account[a.uid]
+            sign = 1 if a.uid < b.uid else -1
+            capacity = _account[a.uid] + sign * _account['balance']
             assert capacity >= 0
             if capacity < value:
                 return None
@@ -144,7 +144,6 @@ class ChannelNetwork(object):
 
         # Assume direct entrypoint into target sector.
         for helper in helpers:
-            # TODO
             print 'Trying to route through helper %d +/- %d to %d.' % (helper.center,
                                                                        int(helper.range / 2),
                                                                        target.uid)
@@ -153,3 +152,10 @@ class ChannelNetwork(object):
                 return path, helper
 
         return None, None
+
+    def do_transfer(self, path, value):
+        for i in range(len(path) - 1):
+            node_a = path[i]
+            node_b = path[i+1]
+            cv1 = node_a.channels[node_b.uid]
+            cv1.balance -= value

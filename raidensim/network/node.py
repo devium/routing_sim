@@ -11,7 +11,7 @@ class Node(object):
         self.uid = uid
         self.num_channels = num_channels
         self.deposit_per_channel = deposit_per_channel
-        self.channels = []
+        self.channels = {}
         self.min_expected_deposit = self.min_deposit_deviation * self.deposit_per_channel
 
     def __repr__(self):
@@ -21,7 +21,7 @@ class Node(object):
 
     @property
     def partners(self):  # all partners
-        return [cv.partner for cv in self.channels]
+        return self.channels.keys()
 
     @property
     def targets(self):
@@ -38,20 +38,23 @@ class Node(object):
 
         # Find closest node to target node that fits the filter and isn't already connected to us.
         for target_id in self.targets:
+            reasons = []
             for attempt, node_id in enumerate(
                     self.cn.get_closest_node_ids(target_id, filter=node_filter)
             ):
                 other = self.cn.node_by_id[node_id]
-                accepted = other.connect_requested(self) and self.connect_requested(other)
-                if accepted:
+                accepted1, reason1 = other.connect_requested(self)
+                accepted2, reason2 = self.connect_requested(other)
+                reasons.append(reason1 if not accepted1 else reason2)
+                if accepted1 and accepted2:
                     self.cn.add_edge(self, other)
                     self.setup_channel(other)
                     other.setup_channel(self)
                     break
                 if attempt > 10:
                     print(
-                        'Failed to find a target node for node {} at {}.'
-                        .format(self.uid, target_id)
+                        'Failed to find a target node for node {} at {}. Reasons: {}'
+                        .format(self.uid, target_id, reasons)
                     )
                     break
 
@@ -60,23 +63,25 @@ class Node(object):
 
     def setup_channel(self, other):
         assert isinstance(other, Node)
+        assert other.uid not in self.channels
         cv = self.channel_view(other)
         cv.deposit = self.deposit_per_channel
         cv.balance = 0
-        self.channels.append(cv)
+        self.channels[other.uid] = cv
 
     def connect_requested(self, other):
         assert isinstance(other, Node)
         if other.deposit_per_channel < self.min_expected_deposit:
             # print "refused to connect", self, other, self.min_expected_deposit
-            return
+            return False, 'Deposit of {} too low.'.format(other.uid)
         if other.uid in self.partners:
-            return
+            return False, 'Already connected.'
         if other == self:
-            return
-        return True
+            return False, 'Cannot connect to self.'
+        return True, 'OK'
 
     def _channels_by_distance(self, target_id, value):
+        # FIXME
 
         max_id = self.cn.max_id
 
@@ -92,6 +97,7 @@ class Node(object):
         return [cv for cv in cvs if cv.capacity >= value]
 
     def find_path_recursively(self, target_id, value, max_hops=50, visited=[]):
+        # FIXME
         """
         sort channels by distance to target, filter by capacity
         setting a low max_hops allows to implment breath first, yielding in shorter paths

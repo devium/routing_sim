@@ -42,7 +42,10 @@ Interactive:
 import random
 import sys
 
+import time
+
 from raidensim.config import ParetoNetworkConfiguration
+from raidensim.draw import plot_channel_imbalances
 from raidensim.network.channel_network import ChannelNetwork
 from raidensim.network.node import Node
 
@@ -71,8 +74,6 @@ def setup_network(config):
     cn.generate_nodes(config)
     cn.generate_helpers(config)
     cn.connect_nodes()
-    draw(cn)
-    # export_obj(cn)
     return cn
 
 
@@ -83,6 +84,7 @@ def test_basic_network(config):
 
 def test_global_pathfinding(config, num_paths=10, value=2):
     cn = setup_network(config)
+    draw(cn)
     for i in range(num_paths):
         print "-" * 40
         source, target = random.sample(cn.nodes, 2)
@@ -103,8 +105,40 @@ def test_global_pathfinding(config, num_paths=10, value=2):
         draw(cn, path, helper)
 
 
-def test_balancing(config):
-    pass
+def test_balancing(config, num_transfers, transfer_value):
+    from raidensim.draw import plot_channel_capacities
+
+    cn = setup_network(config)
+    draw(cn)
+    plot_channel_capacities(cn)
+    plot_channel_imbalances(cn)
+
+    print('Simulating {} transfers between {} nodes over {} channels.'.format(
+        num_transfers, len(cn.nodes), sum((len(edges) for edges in cn.G.edge.values())) / 2
+    ))
+
+    failed = 0
+    random.seed(0)
+    tic = time.time()
+    for i in range(num_transfers):
+        toc = time.time()
+        if toc - tic > 5:
+            tic = toc
+            print('Transfer {}/{}'.format(i + 1, num_transfers))
+
+        source, target = random.sample(cn.nodes, 2)
+        path = cn.find_path_global(source, target, transfer_value)
+        if not path:
+            print('No Path found from {} to {} that could sustain {} token(s).'.format(
+                source, target, transfer_value
+            ))
+            failed += 1
+        else:
+            cn.do_transfer(path, transfer_value)
+
+    print('Finished. {} transfers failed.'.format(failed))
+    plot_channel_capacities(cn)
+    plot_channel_imbalances(cn)
 
 
 def draw(cn, path=None, helper_highlight=None):
@@ -119,4 +153,5 @@ def draw(cn, path=None, helper_highlight=None):
 if __name__ == '__main__':
     test_basic_channel()
     # test_basic_network()
-    test_global_pathfinding(ParetoNetworkConfiguration(1000, 0.6), num_paths=5, value=2)
+    # test_global_pathfinding(ParetoNetworkConfiguration(1000, 0.6), num_paths=5, value=2)
+    test_balancing(ParetoNetworkConfiguration(1000, 0.6), 50000, transfer_value=1)

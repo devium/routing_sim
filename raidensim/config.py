@@ -20,7 +20,7 @@ class BaseNetworkConfiguration(object):
         Linear min/max mapping of fullness to deposit per channel.
         """
         min_deposit = 10
-        max_deposit = 80
+        max_deposit = 100
         return int((max_deposit - min_deposit) * fullness / self.max_fullness + min_deposit)
 
     # pathfinding helpers
@@ -50,4 +50,3 @@ class SemisphereNetworkConfiguration(BaseNetworkConfiguration):
             min_value=self.min_fullness,
             max_value=self.max_fullness
         )
-
