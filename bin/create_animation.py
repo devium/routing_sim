@@ -13,14 +13,15 @@ ANIMATION_LENGTH = 30.0
 CHANNEL_POPUP_DELAY_BASE = 0.1
 CHANNEL_POPUP_DELAY_DECAY = 0.94
 CHANNEL_POPUP_DELAY_MIN = 0.01
-TRANSFER_DELAY_BASE = 0.6
-TRANSFER_DELAY_DECAY = 0.84
+TRANSFER_DELAY_BASE = 1.5
+TRANSFER_DELAY_DECAY = 0.80
 TRANSFER_DELAY_MIN = 0.005
-TRANSFER_HOP_DELAY = 0.1
+TRANSFER_HOP_DELAY = 0.08
 SIMULATION_STEP_SIZE = 0.01
 
 TRANSFER_ATTEMPTS_MAX = 10
 TRANSFER_VALUE = 1
+TOP_HOLE_RADIUS = 0.2
 
 OUTDIR = 'blender/'
 
@@ -42,7 +43,7 @@ class AnimationGenerator(object):
         self.cn.generate_nodes(config)
         self.cn.connect_nodes()
 
-        nodes, self.channel_topology = calc3d_positions(self.cn)
+        nodes, self.channel_topology = calc3d_positions(self.cn, TOP_HOLE_RADIUS)
         self.channel_topology = [tuple(channel) for channel in self.channel_topology]
 
         with open(OUTDIR + 'network.json', 'w') as network_file:

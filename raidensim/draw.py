@@ -24,12 +24,17 @@ def calc_positions(cn):
     return positions
 
 
-def calc3d_positions(cn):
+def calc3d_positions(cn, hole_radius):
     """"helper to position nodes in 3d as circles"""
     positions = []
     max_deposit = max(n.deposit_per_channel for n in cn.nodes)
     min_deposit = min(n.deposit_per_channel for n in cn.nodes)
     range_ = float(max_deposit - min_deposit)
+
+    # Hole left at the top of the semisphere to reduce the visual effect of big nodes appearing
+    # centralized. Note: this hole linearly scales down balances to leave a gap at the top,
+    # possibly distorting an even distribution of balances across a semisphere.
+    max_height = math.sqrt(1 - hole_radius * hole_radius)
 
     for node in cn.nodes:
         # Nodes are distributed on the round surface of a semi-sphere with the flat bit facing
@@ -41,11 +46,10 @@ def calc3d_positions(cn):
         x, y = math.sin(rad), math.cos(rad)
 
         # Height above ground (light client =~0, full node up to 1).
-        h = (node.deposit_per_channel - min_deposit) / range_
+        h = (node.deposit_per_channel - min_deposit) / range_ * max_height
 
         # Project x and y onto semi-sphere surface.
-        # Bound radius so capped nodes don't accumulate at the top.
-        r = max(math.sqrt(1 - h * h), 0.05)
+        r = math.sqrt(1 - h * h)
         x *= r
         y *= r
         positions.append([x, y, h])
