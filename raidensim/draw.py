@@ -3,6 +3,9 @@ import math
 import networkx as nx
 from matplotlib import pyplot as plt
 from collections import defaultdict
+import numpy as np
+
+from matplotlib.ticker import ScalarFormatter, FixedFormatter
 
 
 def calc_positions(cn):
@@ -57,9 +60,10 @@ def calc3d_positions(cn, hole_radius):
 
     edges = set()
     for a_idx, node in enumerate(cn.nodes):
-        for c in node.channels:
+        for c in node.channels.values():
             b_idx = cn.nodeids.index(c.partner)
             edges.add(frozenset({a_idx, b_idx}))
+    assert len(edges) == sum((len(node.channels) for node in cn.nodes)) / 2
     return positions, list(edges)
 
 
@@ -106,27 +110,31 @@ def draw2d(cn, path=None, helper_highlight=None):
     plt.show()
 
 
-def plot_channel_capacities(cn, num_bins=50):
+def plot_channel_distribution(cn, ax):
+    num_channels = [len(node.channels) for node in cn.nodes]
+    max_ = max(num_channels)
+    ax.hist(num_channels, bins=range(max_ + 1), align='left', edgecolor='black')
+    ax.xaxis.set_ticks(np.arange(0, max_ + 1, 2))
+    ax.xaxis.set_ticks(np.arange(1, max_ + 1, 2), minor=True)
+    ax.grid(True)
+
+
+def plot_channel_capacities(cn, ax, num_bins=25):
     capacities = [cv.capacity for node in cn.nodes for cv in node.channels.values()]
-    plt.clf()
-    plt.hist(capacities, bins=num_bins, normed=True)
-    plt.xlabel('Channel capacity')
-    plt.ylabel('Distribution')
-    plt.grid(True)
-    plt.show()
+    ax.hist(capacities, bins=num_bins, edgecolor='black', log=True, range=(0, max(capacities) + 1))
+    ax.grid(True)
 
 
-def plot_channel_imbalances(cn, num_bins=50):
-    channel_to_imbalance = defaultdict(int)
-    for cv in (cv for node in cn.nodes for cv in node.channels.values()):
-        sign = 1 if cv.this > cv.other else -1
-        channel_to_imbalance[frozenset([cv.this, cv.other])] += sign * cv.capacity
+def plot_channel_imbalances(cn, ax, num_bins=25):
+    imbalances = defaultdict(int)
+    for node in cn.nodes:
+        for cv in node.channels.values():
+            imbalances[frozenset([node.uid, cv.partner])] = \
+                abs(cv.deposit - cv.partner_deposit + 2 * cv.balance)
 
-    imbalances = [abs(imbalance) for imbalance in channel_to_imbalance.values()]
+    imbalances = imbalances.values()
+    ax.hist(imbalances, bins=num_bins, edgecolor='black', log=True)
+    ax.grid(True)
 
-    plt.clf()
-    plt.hist(imbalances, bins=num_bins, normed=True)
-    plt.xlabel('Channel imbalance')
-    plt.ylabel('Distribution')
-    plt.grid(True)
-    plt.show()
+    # Return "mean squared error" of imbalances.
+    return sum(imbalance * imbalance for imbalance in imbalances) / len(imbalances)

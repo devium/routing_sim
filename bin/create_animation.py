@@ -38,6 +38,7 @@ Animation = namedtuple('Animation', [
 class AnimationGenerator(object):
     def __init__(self):
         # Export final network configuration.
+        random.seed(0)
         config = SemisphereNetworkConfiguration(NUM_NODES, 10, 1000)
         self.cn = ChannelNetwork()
         self.cn.generate_nodes(config)
@@ -58,13 +59,13 @@ class AnimationGenerator(object):
         self.visible_nodes = set()
         self.visible_channels = set()
         for i, channel in enumerate(self.channel_topology):
+            del self.cn.nodes[channel[0]].channels[self.cn.nodeids[channel[1]]]
+            del self.cn.nodes[channel[1]].channels[self.cn.nodeids[channel[0]]]
             if self.cn.nodes[channel[0]] in self.cn.G.edge:
                 self.cn.G.remove_edge(self.cn.nodes[channel[0]], self.cn.nodes[channel[1]])
             else:
                 self.cn.G.remove_edge(self.cn.nodes[channel[1]], self.cn.nodes[channel[0]])
             self.hidden_channels.add(i)
-
-        random.seed(43)
 
         # Generate node popup and channel transfer animations.
         self.animations = []

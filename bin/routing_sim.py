@@ -45,12 +45,12 @@ import sys
 import time
 
 from raidensim.config import ParetoNetworkConfiguration
-from raidensim.draw import plot_channel_imbalances
+from raidensim.draw import plot_channel_imbalances, plot_channel_distribution
 from raidensim.network.channel_network import ChannelNetwork
 from raidensim.network.node import Node
 
 random.seed(43)
-sys.setrecursionlimit(100)
+sys.setrecursionlimit(10000)
 
 
 def test_basic_channel():
@@ -105,16 +105,20 @@ def test_global_pathfinding(config, num_paths=10, value=2):
         draw(cn, path, helper)
 
 
-def test_balancing(config, num_transfers, transfer_value):
+def test_balancing(config, num_transfers, transfer_value, path_cost):
     from raidensim.draw import plot_channel_capacities
+    import matplotlib.pyplot as plt
 
     cn = setup_network(config)
-    draw(cn)
-    plot_channel_capacities(cn)
-    plot_channel_imbalances(cn)
 
-    print('Simulating {} transfers between {} nodes over {} channels.'.format(
-        num_transfers, len(cn.nodes), sum((len(edges) for edges in cn.G.edge.values())) / 2
+    fig, axs = plt.subplots(2, 3)
+    plot_channel_capacities(cn, axs[0][0])
+    mse_pre = plot_channel_imbalances(cn, axs[0][1])
+    plot_channel_distribution(cn, axs[0][2])
+
+    num_channels_uni =  sum((len(edges) for edges in cn.G.edge.values()))
+    print('Simulating {} transfers between {} nodes over {} bidirectional channels.'.format(
+        num_transfers, len(cn.nodes), num_channels_uni / 2
     ))
 
     failed = 0
@@ -127,7 +131,7 @@ def test_balancing(config, num_transfers, transfer_value):
             print('Transfer {}/{}'.format(i + 1, num_transfers))
 
         source, target = random.sample(cn.nodes, 2)
-        path = cn.find_path_global(source, target, transfer_value)
+        path = cn.find_path_global(source, target, transfer_value, path_cost)
         if not path:
             print('No Path found from {} to {} that could sustain {} token(s).'.format(
                 source, target, transfer_value
@@ -137,8 +141,45 @@ def test_balancing(config, num_transfers, transfer_value):
             cn.do_transfer(path, transfer_value)
 
     print('Finished. {} transfers failed.'.format(failed))
-    plot_channel_capacities(cn)
-    plot_channel_imbalances(cn)
+    plot_channel_capacities(cn, axs[1][0])
+    mse_post = plot_channel_imbalances(cn, axs[1][1])
+
+    # Stats plot (labels only).
+    axs[1][2].text(0, 0.9, '{} nodes'.format(len(cn.nodes)))
+    axs[1][2].text(0, 0.8, '{} channels'.format(num_channels_uni / 2))
+    axs[1][2].text(0, 0.7, '{} transfers'.format(num_transfers))
+    axs[1][2].text(0, 0.6, 'Top row: initial network state')
+    axs[1][2].text(0, 0.5, 'Bottom row: after {} transfers'.format(num_transfers))
+    axs[1][2].text(0, 0.4, '{} transfers failed'.format(failed))
+    axs[1][2].text(0, 0.3, 'Fee model: {}'.format(path_cost))
+    axs[1][2].text(0, 0.2, 'Imbalance MSE before: {}'.format(mse_pre))
+    axs[1][2].text(0, 0.1, 'Imbalance MSE after: {}'.format(mse_post))
+
+    axs[0][0].set_ylabel('Distribution')
+    axs[1][0].set_ylabel('Distribution')
+    axs[1][0].set_xlabel('Channel capacity')
+    axs[1][1].set_xlabel('Channel imbalance')
+    axs[0][2].set_xlabel('Channel count per node')
+    axs[1][2].axis('off')
+
+    plt.show()
+
+
+def test_cost_func_fees():
+    cost_func = ChannelNetwork._get_path_cost_function_imbalance_fees(1)
+
+    class SimpleNode:
+        def __init__(self, uid):
+            self.uid = uid
+
+    cost = cost_func(SimpleNode(1), SimpleNode(2), {1: 10, 2: 12, 'balance': 1})
+    assert abs(cost - 0.5) < 0.01
+    cost = cost_func(SimpleNode(1), SimpleNode(2), {1: 10, 2: 12, 'balance': 3})
+    assert abs(cost - 0.018) < 0.01
+    cost =  cost_func(SimpleNode(2), SimpleNode(1), {1: 10, 2: 12, 'balance': 3})
+    assert abs(cost - 0.98) < 0.01
+    cost = cost_func(SimpleNode(1), SimpleNode(2), {1: 10, 2: 12, 'balance': -5})
+    assert abs(cost - 0.99) < 0.01
 
 
 def draw(cn, path=None, helper_highlight=None):
@@ -152,6 +193,20 @@ def draw(cn, path=None, helper_highlight=None):
 
 if __name__ == '__main__':
     test_basic_channel()
+    test_cost_func_fees()
     # test_basic_network()
     # test_global_pathfinding(ParetoNetworkConfiguration(1000, 0.6), num_paths=5, value=2)
-    test_balancing(ParetoNetworkConfiguration(1000, 0.6), 50000, transfer_value=1)
+    config = ParetoNetworkConfiguration(
+        num_nodes=100,
+        a=0.6,
+        min_channels=2,
+        max_channels=10,
+        min_deposit=10,
+        max_deposit=100
+    )
+    test_balancing(
+        config,
+        num_transfers=5000,
+        transfer_value=1,
+        path_cost='imbalance'
+    )

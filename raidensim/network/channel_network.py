@@ -1,16 +1,16 @@
+import math
 import random
 
 import networkx as nx
 
 from raidensim.dijkstra_weighted import dijkstra_path
+from raidensim.network.node import FullNode
 from raidensim.network.node import Node
 from raidensim.network.path_finding_helper import PathFindingHelper
-from raidensim.network.node import FullNode
 
 
 class ChannelNetwork(object):
-
-    max_id = 2**32
+    max_id = 2 ** 32
     # max_id = 100
     num_channels_per_node = 5  # outgoing
 
@@ -94,10 +94,12 @@ class ChannelNetwork(object):
                 yield rid
                 ridx, rid = get_next(ridx, inc=1)
 
-    def _get_path_cost_function(self, value, hop_cost=1):
+    @staticmethod
+    def _get_path_cost_function(value, hop_cost=1):
         """
         goal: from all possible paths, choose from the shortes with enough capacity
         """
+
         def cost_func_fast(a, b, _account):
             # this func should be as fast as possible, as it's called often
             # don't alloc memory
@@ -107,13 +109,39 @@ class ChannelNetwork(object):
             if capacity < value:
                 return None
             return hop_cost
+
         return cost_func_fast
 
-    def find_path_global(self, source, target, value):
+    @staticmethod
+    def _get_path_cost_function_imbalance_fees(value):
+        def cost_func_fees(a, b, _account):
+            # this func should be as fast as possible, as it's called often
+            # don't alloc memory
+            sign = 1 if a.uid < b.uid else -1
+            capacity = _account[a.uid] + sign * _account['balance']
+            # assert capacity >= 0
+            if capacity < value:
+                return None
+
+            # Positive imbalance <=> a has a higher capacity than b.
+            imbalance = _account[a.uid] - _account[b.uid] + sign * 2 * _account['balance']
+            # Sigmoid function.
+            return 1 - 1 / (1 + math.exp(-imbalance))
+
+        return cost_func_fees
+
+    def find_path_global(self, source, target, value, path_cost_mode='constant'):
         assert isinstance(source, Node)
         assert isinstance(target, Node)
+        path_cost_func = None
+        if path_cost_mode == 'constant':
+            path_cost_func = self._get_path_cost_function(value)
+        elif path_cost_mode == 'imbalance':
+            path_cost_func = self._get_path_cost_function_imbalance_fees(value)
         try:
-            path = dijkstra_path(self.G, source, target, self._get_path_cost_function(value))
+            path = dijkstra_path(
+                self.G, source, target, path_cost_func
+            )
             return path
         except nx.NetworkXNoPath:
             return None
@@ -156,6 +184,6 @@ class ChannelNetwork(object):
     def do_transfer(self, path, value):
         for i in range(len(path) - 1):
             node_a = path[i]
-            node_b = path[i+1]
+            node_b = path[i + 1]
             cv1 = node_a.channels[node_b.uid]
             cv1.balance -= value
