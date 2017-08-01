@@ -15,14 +15,14 @@ class BaseNetworkConfiguration(object):
         """
         Linear min/max mapping of fullness to channel count.
         """
-        return int((self.max_channels - self.min_channels) * fullness / \
+        return int((self.max_channels - self.min_channels) * fullness /
                    self.max_fullness + self.min_channels)
 
     def get_channel_deposit(self, fullness):
         """
         Linear min/max mapping of fullness to deposit per channel.
         """
-        return int((self.max_deposit - self.min_deposit) * fullness / \
+        return int((self.max_deposit - self.min_deposit) * fullness /
                    self.max_fullness + self.min_deposit)
 
     # pathfinding helpers

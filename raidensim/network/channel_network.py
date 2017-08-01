@@ -46,13 +46,17 @@ class ChannelNetwork(object):
         for node in self.nodes:
             node.initiate_channels()
 
+        del_nodes = []
         for node in self.nodes:
             if not node.channels:
                 print "not connected", node
+                del_nodes.append(node)
                 self.nodeids.remove(node.uid)
                 del self.node_by_id[node.uid]
             elif len(node.channels) < 2:
                 print "weakly connected", node
+
+        self.nodes = [node for node in self.nodes if node not in del_nodes]
 
     def add_edge(self, A, B):
         assert isinstance(A, Node)
@@ -125,6 +129,7 @@ class ChannelNetwork(object):
 
             # Positive imbalance <=> a has a higher capacity than b.
             imbalance = _account[a.uid] - _account[b.uid] + sign * 2 * _account['balance']
+            imbalance -= 2 * value
             # Sigmoid function.
             return 1 - 1 / (1 + math.exp(-imbalance))
 

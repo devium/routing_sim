@@ -116,7 +116,7 @@ def test_balancing(config, num_transfers, transfer_value, path_cost):
     mse_pre = plot_channel_imbalances(cn, axs[0][1])
     plot_channel_distribution(cn, axs[0][2])
 
-    num_channels_uni =  sum((len(edges) for edges in cn.G.edge.values()))
+    num_channels_uni = sum((len(edges) for edges in cn.G.edge.values()))
     print('Simulating {} transfers between {} nodes over {} bidirectional channels.'.format(
         num_transfers, len(cn.nodes), num_channels_uni / 2
     ))
@@ -131,6 +131,10 @@ def test_balancing(config, num_transfers, transfer_value, path_cost):
             print('Transfer {}/{}'.format(i + 1, num_transfers))
 
         source, target = random.sample(cn.nodes, 2)
+        # Repick nodes that cannot send transfers anymore.
+        while max(cv.capacity for cv in source.channels.values()) < transfer_value:
+            source, target = random.sample(cn.nodes, 2)
+
         path = cn.find_path_global(source, target, transfer_value, path_cost)
         if not path:
             print('No Path found from {} to {} that could sustain {} token(s).'.format(
@@ -172,14 +176,14 @@ def test_cost_func_fees():
         def __init__(self, uid):
             self.uid = uid
 
-    cost = cost_func(SimpleNode(1), SimpleNode(2), {1: 10, 2: 12, 'balance': 1})
-    assert abs(cost - 0.5) < 0.01
-    cost = cost_func(SimpleNode(1), SimpleNode(2), {1: 10, 2: 12, 'balance': 3})
-    assert abs(cost - 0.018) < 0.01
-    cost =  cost_func(SimpleNode(2), SimpleNode(1), {1: 10, 2: 12, 'balance': 3})
-    assert abs(cost - 0.98) < 0.01
-    cost = cost_func(SimpleNode(1), SimpleNode(2), {1: 10, 2: 12, 'balance': -5})
-    assert abs(cost - 0.99) < 0.01
+    cost = cost_func(SimpleNode(1), SimpleNode(2), {1: 10, 2: 12, 'balance': 1})  # 0-2
+    assert abs(cost - 0.881) < 0.01
+    cost = cost_func(SimpleNode(1), SimpleNode(2), {1: 10, 2: 12, 'balance': 3})  # 4-2
+    assert abs(cost - 0.119) < 0.01
+    cost = cost_func(SimpleNode(2), SimpleNode(1), {1: 10, 2: 12, 'balance': 3})  # -4-2
+    assert abs(cost - 0.998) < 0.01
+    cost = cost_func(SimpleNode(1), SimpleNode(2), {1: 10, 2: 12, 'balance': -5})  # -12-2
+    assert abs(cost - 0.999) < 0.01
 
 
 def draw(cn, path=None, helper_highlight=None):
@@ -197,7 +201,7 @@ if __name__ == '__main__':
     # test_basic_network()
     # test_global_pathfinding(ParetoNetworkConfiguration(1000, 0.6), num_paths=5, value=2)
     config = ParetoNetworkConfiguration(
-        num_nodes=100,
+        num_nodes=20,
         a=0.6,
         min_channels=2,
         max_channels=10,
@@ -206,7 +210,7 @@ if __name__ == '__main__':
     )
     test_balancing(
         config,
-        num_transfers=5000,
+        num_transfers=10000,
         transfer_value=1,
-        path_cost='imbalance'
+        path_cost='constant'
     )

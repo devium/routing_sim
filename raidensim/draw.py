@@ -5,8 +5,6 @@ from matplotlib import pyplot as plt
 from collections import defaultdict
 import numpy as np
 
-from matplotlib.ticker import ScalarFormatter, FixedFormatter
-
 
 def calc_positions(cn):
     """helper to position nodes on a 2d plane as a circle"""
@@ -113,7 +111,7 @@ def draw2d(cn, path=None, helper_highlight=None):
 def plot_channel_distribution(cn, ax):
     num_channels = [len(node.channels) for node in cn.nodes]
     max_ = max(num_channels)
-    ax.hist(num_channels, bins=range(max_ + 1), align='left', edgecolor='black')
+    ax.hist(num_channels, bins=range(max_ + 1), align='right', edgecolor='black')
     ax.xaxis.set_ticks(np.arange(0, max_ + 1, 2))
     ax.xaxis.set_ticks(np.arange(1, max_ + 1, 2), minor=True)
     ax.grid(True)
