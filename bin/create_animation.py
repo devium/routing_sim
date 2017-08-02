@@ -10,12 +10,21 @@ NUM_NODES = 200
 
 # Base unit = seconds.
 ANIMATION_LENGTH = 30.0
-CHANNEL_POPUP_DELAY_BASE = 0.1
-CHANNEL_POPUP_DELAY_DECAY = 0.94
-CHANNEL_POPUP_DELAY_MIN = 0.01
-TRANSFER_DELAY_BASE = 1.5
-TRANSFER_DELAY_DECAY = 0.80
-TRANSFER_DELAY_MIN = 0.005
+
+POPUP_FREQ_MAX = 100.0
+
+
+def get_popup_freq(time):
+    f = 74818050 + (6.999041 - 74818050)/(1 + (time/2263.086)**3.021407)
+    return min(POPUP_FREQ_MAX, f)
+
+TRANSFER_FREQ_MAX = 500.0
+
+
+def get_transfer_freq(time):
+    f = 40154.69 + (0.7494107 - 40154.69) / (1 + (time / 50.1504) ** 7.583642)
+    return min(TRANSFER_FREQ_MAX, f)
+
 TRANSFER_HOP_DELAY = 0.08
 SIMULATION_STEP_SIZE = 0.01
 
@@ -71,35 +80,36 @@ class AnimationGenerator(object):
         self.animations = []
         self.transfer_id = 0
         self.time = 0.0
-        last_speedup = 0.0
         last_popup = 0.0
         last_transfer = 0.0
+        max_channel_popups_reached = None
         max_transfers_reached = None
-        channel_popup_delay = CHANNEL_POPUP_DELAY_BASE
-        transfer_delay = TRANSFER_DELAY_BASE
+        channel_popup_freq = 0
+        transfer_freq = 0
         while self.time < ANIMATION_LENGTH:
-            if self.time - last_speedup > 1.0:
-                last_speedup += 1.0
-                channel_popup_delay *= CHANNEL_POPUP_DELAY_DECAY
-                channel_popup_delay = max(channel_popup_delay, CHANNEL_POPUP_DELAY_MIN)
-                transfer_delay *= TRANSFER_DELAY_DECAY
-                transfer_delay = max(transfer_delay, TRANSFER_DELAY_MIN)
-                if not max_transfers_reached and transfer_delay == TRANSFER_DELAY_MIN:
-                    max_transfers_reached = self.time
+            channel_popup_freq = get_popup_freq(self.time)
+            channel_popup_delta = 1.0 / channel_popup_freq
+            if not max_channel_popups_reached and channel_popup_freq == POPUP_FREQ_MAX:
+                max_channel_popups_reached = self.time
+            transfer_freq = get_transfer_freq(self.time)
+            transfer_delta = 1.0 / transfer_freq
+            if not max_transfers_reached and transfer_freq == TRANSFER_FREQ_MAX:
+                max_transfers_reached = self.time
 
-            while self.hidden_channels and self.time - last_popup >= channel_popup_delay:
-                last_popup += channel_popup_delay
+            while self.hidden_channels and self.time - last_popup >= channel_popup_delta:
+                last_popup += channel_popup_delta
                 self.create_channels(1, connected_only=bool(self.animations))
 
-            while len(self.visible_nodes) >= 2 and self.time - last_transfer >= transfer_delay:
-                last_transfer += transfer_delay
+            while len(self.visible_nodes) >= 2 and self.time - last_transfer >= transfer_delta:
+                last_transfer += transfer_delta
                 self.create_transfer()
 
             self.time += SIMULATION_STEP_SIZE
 
         print('Last channel popup at {}'.format(last_popup))
-        print('Final channel popup delay: {}'.format(channel_popup_delay))
-        print('Final transfer delay: {}'.format(transfer_delay))
+        print('Final channel popup frequency: {}'.format(channel_popup_freq))
+        print('Max channel popup frequency reached at {}'.format(max_channel_popups_reached))
+        print('Final transfer frequency: {}'.format(transfer_freq))
         print('Max transfer frequency reached at {}'.format(max_transfers_reached))
 
         with open(OUTDIR + 'animation.json', 'w') as animation_file:
