@@ -3,35 +3,46 @@ from collections import namedtuple, defaultdict
 
 import bpy
 
-from settings import ANIMATION_FILE, TRANSFER_COLORS, ANIMATION_LENGTH_SHOW, \
-    ANIMATION_LENGTH_FLASH, ANIMATION_LENGTH_HIDE
+from settings import ANIMATION_FILE, ANIMATION_LENGTH_SHOW, \
+    ANIMATION_LENGTH_FLASH, ANIMATION_LENGTH_HIDE, ANIMATION_DEPTH
+
+
+def to_pass_index(active_progress, hidden_progress):
+    """
+    Map constrained two-dimensional values in [0,1]^2 to a one-dimensional domain by transforming
+    them first mapping their values into a limited integer domain {0,1,2,...,c} and then combining
+    them using a polynomial:
+    a,b in [0,1]
+    a_int, b_int = floor(a * (c - 1)), floor(b * (c - 1))
+    combined = a_int * c + b_int
+    I'm sure there is a name for this kind of mapping.
+    """
+    active_int = int((ANIMATION_DEPTH - 1) * active_progress)
+    hidden_int = int((ANIMATION_DEPTH - 1) * hidden_progress)
+    return ANIMATION_DEPTH * active_int + hidden_int
+
+
+def from_pass_index(pass_index):
+    return pass_index // ANIMATION_DEPTH / (ANIMATION_DEPTH - 1), \
+           pass_index % ANIMATION_DEPTH / (ANIMATION_DEPTH - 1)
 
 
 def reset_progress(except_=None):
     if not except_:
         except_ = set()
-    network_mats = [
-        mat for mat in bpy.data.materials
-        if 'Material.Network.' in mat.name and
-        mat.name[17:] not in except_
-    ]
 
     objs = [
         obj for obj in bpy.data.objects
-        if 'Object.Network.' in obj.name and
+        if ('Object.Network.Node' in obj.name or 'Object.Network.Channel' in obj.name) and
         obj.name[15:] not in except_
     ]
 
     for obj in objs:
         obj.hide = True
         obj.hide_render = True
+        obj.pass_index = to_pass_index(0, 1)
 
-    for mat in network_mats:
-        curve_group = mat.node_tree.nodes['Group.Curve']
-        curve_group.inputs[0].default_value = 1
-        curve_group.inputs[1].default_value = 0
-
-    print('Reset {} materials.'.format(len(network_mats)))
+    print('Reset {} objects.'.format(len(objs)))
 
 
 class Animator:
@@ -60,7 +71,6 @@ class Animator:
             'channel': 'Channel'
         }
 
-        self.transfer_colors = TRANSFER_COLORS
         self.last_frame = -2
 
         bpy.app.handlers.frame_change_pre.clear()
@@ -69,7 +79,7 @@ class Animator:
 
     def on_frame(self, scene):
         """
-        Main objective: avoid Blender state changes. Update each material at most once.
+        Main objective: avoid Blender state changes. Update each object at most once.
         """
         time = scene.frame_current / scene.render.fps
         frame_time = 1 / scene.render.fps
@@ -106,10 +116,10 @@ class Animator:
             animation_progress = max(0.0, min(1.0, animation_progress))
 
             # Compute and set progress inputs for mixers.
-            hidden_progress, active_progress = animate(animation, animation_progress)
+            active_progress, hidden_progress = animate(animation, animation_progress)
 
             type_to_id_to_mat_update[animation.element_type][animation.element_id] = (
-                hidden_progress, active_progress, animation.transfer_id
+                active_progress, hidden_progress, animation.transfer_id
             )
 
         if not diff_only:
@@ -126,34 +136,29 @@ class Animator:
         num_updates = 0
         for element_type, id_to_mat_update in type_to_id_to_mat_update.items():
             for element_id, (
-                    hidden_progress,
                     active_progress,
+                    hidden_progress,
                     transfer_id
             ) in id_to_mat_update.items():
                 # Get references to element's material shader mixers.
                 name = '{}.{:06d}'.format(
                     self.element_type_to_name[element_type], element_id
                 )
-                mat = bpy.data.materials['Material.Network.' + name]
                 obj = bpy.data.objects['Object.Network.' + name]
-                curve_group = mat.node_tree.nodes['Group.Curve']
-                hidden_progress_input = curve_group.inputs[0]
-                active_progress_input = curve_group.inputs[1]
-                transfer_color_input = mat.node_tree.nodes['Group.Active'].inputs[0]
+                current_active_progress, current_hidden_progress = from_pass_index(obj.pass_index)
 
-                if hidden_progress > -1:
-                    hidden_progress_input.default_value = hidden_progress
+                active_progress = current_active_progress if active_progress == -1 \
+                    else active_progress
+                hidden_progress = current_hidden_progress if hidden_progress == -1 \
+                    else hidden_progress
                 if hidden_progress > 0.99:
                     obj.hide = True
                     obj.hide_render = True
                 else:
                     obj.hide = False
                     obj.hide_render = False
-                if active_progress > -1:
-                    active_progress_input.default_value = active_progress
-                if transfer_id > -1:
-                    color_idx = transfer_id % len(self.transfer_colors)
-                    transfer_color_input.default_value = self.transfer_colors[color_idx]
+
+                obj.pass_index = to_pass_index(active_progress, hidden_progress)
 
                 num_updates += 1
 
@@ -162,15 +167,15 @@ class Animator:
 
 def animate(animation, progress):
     """
-    Returns a tuple for the current mixer values (progress_hidden, progress_active).
+    Returns a tuple for the current mixer values (progress_active, progress_hidden).
     Tuple elements are -1 if unchanged.
     """
     if animation.animation_type == 'show':
-        return 1 - progress, -1
+        return -1, 1 - progress
     elif animation.animation_type == 'flash':
-        return -1, progress
-    elif animation.animation_type == 'hide':
         return progress, -1
+    elif animation.animation_type == 'hide':
+        return -1, progress
     else:
         return -1, -1
 

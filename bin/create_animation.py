@@ -1,12 +1,13 @@
 import json
 import random
+import time
 from collections import namedtuple
 
 from raidensim.config import SemisphereNetworkConfiguration
 from raidensim.network.channel_network import ChannelNetwork
 from raidensim.draw import calc3d_positions
 
-NUM_NODES = 200
+NUM_NODES = 2000
 
 # Base unit = seconds.
 ANIMATION_LENGTH = 30.0
@@ -18,12 +19,14 @@ def get_popup_freq(time):
     f = 74818050 + (6.999041 - 74818050)/(1 + (time/2263.086)**3.021407)
     return min(POPUP_FREQ_MAX, f)
 
+
 TRANSFER_FREQ_MAX = 500.0
 
 
 def get_transfer_freq(time):
     f = 40154.69 + (0.7494107 - 40154.69) / (1 + (time / 50.1504) ** 7.583642)
     return min(TRANSFER_FREQ_MAX, f)
+
 
 TRANSFER_HOP_DELAY = 0.08
 SIMULATION_STEP_SIZE = 0.01
@@ -77,6 +80,7 @@ class AnimationGenerator(object):
             self.hidden_channels.add(i)
 
         # Generate node popup and channel transfer animations.
+        print('Generating animation.')
         self.animations = []
         self.transfer_id = 0
         self.time = 0.0
@@ -86,7 +90,13 @@ class AnimationGenerator(object):
         max_transfers_reached = None
         channel_popup_freq = 0
         transfer_freq = 0
+        tic = time.time()
         while self.time < ANIMATION_LENGTH:
+            toc = time.time()
+            if toc - tic > 5:
+                tic = toc
+                print('Animation progress: {}/{}'.format(self.time, ANIMATION_LENGTH))
+
             channel_popup_freq = get_popup_freq(self.time)
             channel_popup_delta = 1.0 / channel_popup_freq
             if not max_channel_popups_reached and channel_popup_freq == POPUP_FREQ_MAX:

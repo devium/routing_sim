@@ -2,6 +2,7 @@ import math
 import random
 
 import networkx as nx
+import time
 
 from raidensim.dijkstra_weighted import dijkstra_path
 from raidensim.network.node import FullNode
@@ -43,7 +44,13 @@ class ChannelNetwork(object):
             self.helpers.append(PathFindingHelper(self, range_, center))
 
     def connect_nodes(self):
-        for node in self.nodes:
+        print('Connecting nodes.')
+        tic = time.time()
+        for i, node in enumerate(self.nodes):
+            toc = time.time()
+            if toc - tic > 5:
+                tic = toc
+                print('Connecting node {}/{}'.format(i, len(self.nodes)))
             node.initiate_channels()
 
         del_nodes = []

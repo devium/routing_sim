@@ -11,8 +11,6 @@ ANIMATION_LENGTH_SHOW = 0.1
 ANIMATION_LENGTH_FLASH = 1.0
 ANIMATION_LENGTH_HIDE = 0.1
 
-TRANSFER_COLORS = [
-    (0.0, 0.5, 1.0, 1.0),  # Cyan
-    # (1.0, 0.0, 0.5, 1.0),  # Magenta
-    # (1.0, 0.5, 0.0, 1.0),  # Orange
-]
+ANIMATION_DEPTH = 50
+
+TRANSFER_COLOR = (0.0, 0.5, 1.0, 1.0)
