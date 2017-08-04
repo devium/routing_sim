@@ -7,7 +7,7 @@ from raidensim.config import SemisphereNetworkConfiguration
 from raidensim.network.channel_network import ChannelNetwork
 from raidensim.draw import calc3d_positions
 
-NUM_NODES = 2000
+NUM_NODES = 1000
 
 # Base unit = seconds.
 ANIMATION_LENGTH = 30.0
@@ -216,17 +216,18 @@ class AnimationGenerator(object):
                 self.transfer_id += 1
                 break
 
-    def flash_node(self, node, time_offset=0):
+    def flash_nodes(self, nodes, time_offset=0):
         """
-        Creates a 'flash' animation for the given node.
+        Creates a 'flash' animation for the given nodes.
         """
-        self.animations.append(Animation(
-            time=self.time + time_offset,
-            animation_type='flash',
-            element_type='node',
-            element_id=node,
-            transfer_id=self.transfer_id
-        ))
+        for node in nodes:
+            self.animations.append(Animation(
+                time=self.time + time_offset,
+                animation_type='flash',
+                element_type='node',
+                element_id=node,
+                transfer_id=self.transfer_id
+            ))
 
     def flash_route(self, channels):
         """
@@ -234,11 +235,11 @@ class AnimationGenerator(object):
         """
 
         time_offset = 0
-        if channels:
-            self.flash_node(self.channel_topology[channels[0]][0], time_offset)
+        flashed_nodes = set()
         for channel in channels:
-            time_offset += TRANSFER_HOP_DELAY
-            self.flash_node(self.channel_topology[channel][1], time_offset)
+            channel_nodes = set(self.channel_topology[channel])
+            flashed_nodes = channel_nodes - flashed_nodes
+            self.flash_nodes(flashed_nodes, time_offset)
             self.animations.append(Animation(
                 time=self.time + time_offset,
                 animation_type='flash',
@@ -246,6 +247,7 @@ class AnimationGenerator(object):
                 element_id=channel,
                 transfer_id=self.transfer_id
             ))
+            time_offset += TRANSFER_HOP_DELAY
 
 
 if __name__ == '__main__':
