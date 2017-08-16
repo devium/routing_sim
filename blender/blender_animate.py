@@ -108,7 +108,15 @@ class Animator:
             ]
             print('Jumping frame. Replaying {} animations.'.format(len(current_animations)))
 
-        type_to_id_to_mat_update = defaultdict(dict)
+        # We need the curve mappings to find out which transfer is currently brightest.
+        node_curve = bpy.data.materials['Material.Network.Node'].node_tree.nodes['RGB Curves']
+        channel_curve = bpy.data.materials['Material.Network.Channel'].node_tree.nodes['RGB Curves']
+        type_to_active_curve = {
+            'node': node_curve.mapping.curves[0],
+            'channel': channel_curve.mapping.curves[0]
+        }
+
+        type_to_id_to_mat_update = defaultdict(lambda: defaultdict(lambda: [0, 0, 0]))
         for animation in current_animations:
             # Compute animation progress.
             animation_length = self.animation_type_to_length[animation.animation_type]
@@ -118,18 +126,30 @@ class Animator:
             # Compute and set progress inputs for mixers.
             active_progress, hidden_progress = animate(animation, animation_progress)
 
-            type_to_id_to_mat_update[animation.element_type][animation.element_id] = (
-                active_progress, hidden_progress, animation.transfer_id
-            )
+            animation_state = \
+                type_to_id_to_mat_update[animation.element_type][animation.element_id]
+
+            if active_progress != -1:
+                if animation.transfer_id != animation_state[2]:
+                    # If there are multiple active transfers, take the brightest one.
+                    curve = type_to_active_curve[animation.element_type]
+                    active_progress = max(
+                        (curve.evaluate(animation_state[0]), animation_state[0]),
+                        (curve.evaluate(active_progress), active_progress)
+                    )[1]
+                animation_state[0] = active_progress
+            if hidden_progress != -1:
+                animation_state[1] = hidden_progress
+            animation_state[2] = animation.transfer_id
 
         if not diff_only:
-            # Reset materials that have not been updated.
+            # Reset objects that have not been updated.
             except_ = {
                 '{}.{:06d}'.format(self.element_type_to_name[element_type], element_id)
                 for element_type, id_to_mat_update in type_to_id_to_mat_update.items()
                 for element_id in id_to_mat_update.keys()
             }
-            print('Avoided reset on {} updated materials.'.format(len(except_)))
+            print('Avoided reset on {} updated objects.'.format(len(except_)))
             reset_progress(except_)
 
         # Time for actual updates.
@@ -147,10 +167,14 @@ class Animator:
                 obj = bpy.data.objects['Object.Network.' + name]
                 current_active_progress, current_hidden_progress = from_pass_index(obj.pass_index)
 
-                active_progress = current_active_progress if active_progress == -1 \
-                    else active_progress
-                hidden_progress = current_hidden_progress if hidden_progress == -1 \
-                    else hidden_progress
+                if active_progress == -1:
+                    active_progress = current_active_progress
+
+                if hidden_progress == -1:
+                    hidden_progress = current_hidden_progress
+                    # TODO: REMOVE
+                    print('progress == -1 for {} {}'.format(element_type, element_id))
+
                 if hidden_progress > 0.99:
                     obj.hide = True
                     obj.hide_render = True
