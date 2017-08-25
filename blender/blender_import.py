@@ -3,8 +3,14 @@ import time
 
 import bpy
 
-from settings import NETWORK_FILE, SPHERES_NUM_SEGMENTS, SPHERES_NUM_RINGS, SPHERES_SIZE, \
-    CHANNELS_RADIUS, CHANNELS_RESOLUTION
+from settings import (
+    NETWORK_FILE,
+    SPHERES_NUM_SEGMENTS,
+    SPHERES_NUM_RINGS,
+    SPHERES_SIZE,
+    CHANNELS_RADIUS,
+    CHANNELS_RESOLUTION
+)
 
 
 def clear_objects():

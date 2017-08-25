@@ -12,8 +12,6 @@ from raidensim.network.path_finding_helper import PathFindingHelper
 
 class ChannelNetwork(object):
     max_id = 2 ** 32
-    # max_id = 100
-    num_channels_per_node = 5  # outgoing
 
     def __init__(self):
         self.G = nx.Graph()
@@ -29,7 +27,7 @@ class ChannelNetwork(object):
             fullness = config.fullness_dist.random()
             num_channels = config.get_num_channels(fullness)
             deposit_per_channel = config.get_channel_deposit(fullness)
-            node = FullNode(self, uid, num_channels, deposit_per_channel)
+            node = FullNode(self, uid, fullness, num_channels, deposit_per_channel)
             self.node_by_id[uid] = node
 
         self.nodeids = sorted(self.node_by_id.keys())

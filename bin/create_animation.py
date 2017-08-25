@@ -3,39 +3,44 @@ import random
 import time
 from collections import namedtuple
 
-from raidensim.config import SemisphereNetworkConfiguration
+from raidensim.config import NetworkConfiguration
+from raidensim.dist import BetaDistribution
 from raidensim.network.channel_network import ChannelNetwork
 from raidensim.draw import calc3d_positions
 
-NUM_NODES = 1000
+# Network topology parameters.
+NUM_NODES = 500
+MIN_CHANNELS = 2
+MAX_CHANNELS = 10
+TOP_HOLE_RADIUS = 0.2
+# Parameters for node fullness distribution (beta distribution). Applet:
+# http://homepage.divms.uiowa.edu/~mbognar/applets/beta.html
+FULLNESS_BETA_A = 1.1
+FULLNESS_BETA_B = 5
 
-# Base unit = seconds.
+# Animation settings. Base unit = seconds.
 ANIMATION_LENGTH = 30.0
-
-POPUP_FREQ_MAX = 100.0
-
-
-def get_popup_freq(time):
-    f = 74818050 + (6.999041 - 74818050)/(1 + (time/2263.086)**3.021407)
-    return min(POPUP_FREQ_MAX, f)
-
-
-TRANSFER_FREQ_MAX = 500.0
-
-
-def get_transfer_freq(time):
-    f = 40154.69 + (0.7494107 - 40154.69) / (1 + (time / 50.1504) ** 7.583642)
-    return min(TRANSFER_FREQ_MAX, f)
-
-
 TRANSFER_HOP_DELAY = 0.08
 SIMULATION_STEP_SIZE = 0.01
 
 TRANSFER_ATTEMPTS_MAX = 10
 TRANSFER_VALUE = 1
-TOP_HOLE_RADIUS = 0.2
 
+POPUP_FREQ_MAX = 100.0
+TRANSFER_FREQ_MAX = 500.0
 OUTDIR = 'blender/'
+
+
+def get_popup_freq(time):
+    f = 100
+    # f = 74818050 + (6.999041 - 74818050)/(1 + (time/2263.086)**3.021407)
+    return min(POPUP_FREQ_MAX, f)
+
+
+def get_transfer_freq(time):
+    f = time + 1
+    # f = 40154.69 + (0.7494107 - 40154.69) / (1 + (time / 50.1504) ** 7.583642)
+    return min(TRANSFER_FREQ_MAX, f)
 
 
 Animation = namedtuple('Animation', [
@@ -50,13 +55,24 @@ Animation = namedtuple('Animation', [
 class AnimationGenerator(object):
     def __init__(self):
         # Export final network configuration.
+        print('Creating animation for {} nodes.'.format(NUM_NODES))
         random.seed(0)
-        config = SemisphereNetworkConfiguration(NUM_NODES, 10, 1000)
+        fullness_dist = BetaDistribution(FULLNESS_BETA_A, FULLNESS_BETA_B)
+        config = NetworkConfiguration(
+            num_nodes=NUM_NODES,
+            fullness_dist=fullness_dist,
+            min_channels=MIN_CHANNELS,
+            max_channels=MAX_CHANNELS,
+            min_deposit=10,
+            max_deposit=200
+        )
         self.cn = ChannelNetwork()
         self.cn.generate_nodes(config)
         self.cn.connect_nodes()
 
-        nodes, self.channel_topology = calc3d_positions(self.cn, TOP_HOLE_RADIUS)
+        nodes, self.channel_topology = calc3d_positions(
+            self.cn, TOP_HOLE_RADIUS, dist_pdf=fullness_dist.get_pdf()
+        )
         self.channel_topology = [tuple(channel) for channel in self.channel_topology]
 
         with open(OUTDIR + 'network.json', 'w') as network_file:

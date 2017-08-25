@@ -1,4 +1,3 @@
-/blender/animation.json
-/blender/network.json
 *.egg-info
 /env
+/blender/data/

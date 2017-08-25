@@ -26,32 +26,34 @@ def calc_positions(cn):
     return positions
 
 
-def calc3d_positions(cn, hole_radius):
-    """"helper to position nodes in 3d as circles"""
+def calc3d_positions(cn, hole_radius, dist_pdf):
+    """"
+    Helper to position nodes in 3d.
+    Nodes are again distributed on rings, their address determining the position on that ring.
+    The fuller nodes are (more channels, higher deposits) the higher these nodes are positioned.
+    The radius function determines the radius of the 3D shape at a certain height/fullness. The
+    default is a semisphere-like radius calculation.
+    Preferably, the radius calculation should match the fullness distribution to achieve an even
+    distribution of nodes on the surface of the resulting shape.
+    """
     positions = []
-    max_deposit = max(n.deposit_per_channel for n in cn.nodes)
-    min_deposit = min(n.deposit_per_channel for n in cn.nodes)
-    range_ = float(max_deposit - min_deposit)
-
-    # Hole left at the top of the semisphere to reduce the visual effect of big nodes appearing
-    # centralized. Note: this hole linearly scales down balances to leave a gap at the top,
-    # possibly distorting an even distribution of balances across a semisphere.
-    max_height = math.sqrt(1 - hole_radius * hole_radius)
+    max_fullness = max(n.fullness for n in cn.nodes)
+    min_fullness = min(n.fullness for n in cn.nodes)
+    pdf_scale = 1.0 / max(dist_pdf([n.fullness for n in cn.nodes]))
+    range_ = float(max_fullness - min_fullness)
 
     for node in cn.nodes:
-        # Nodes are distributed on the round surface of a semi-sphere with the flat bit facing
-        # down. Light clients are positioned more toward the flat bottom while full nodes are
-        # positioned more toward the round top, reducing visual distance to the light clients.
-
         # Put x,y on circle of radius 1.
         rad = 2 * math.pi * node.uid / float(cn.max_id)
         x, y = math.sin(rad), math.cos(rad)
 
         # Height above ground (light client =~0, full node up to 1).
-        h = (node.deposit_per_channel - min_deposit) / range_ * max_height
+        h = (node.fullness - min_fullness) / range_
 
-        # Project x and y onto semi-sphere surface.
-        r = math.sqrt(1 - h * h)
+        # Adjust radius to evenly distribute nodes on the 3D surface.
+        r = dist_pdf(h) * pdf_scale
+        # Make hole at top by moving higher nodes out a bit (min radius = hole_radius).
+        r = (1 - hole_radius) * r + hole_radius
         x *= r
         y *= r
         positions.append([x, y, h])

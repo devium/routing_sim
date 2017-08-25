@@ -5,10 +5,11 @@ class Node(object):
 
     min_deposit_deviation = 0.5  # accept up to X of own deposit
 
-    def __init__(self, cn, uid, num_channels=0, deposit_per_channel=100):
+    def __init__(self, cn, uid, fullness=0, num_channels=0, deposit_per_channel=100):
         self.cn = cn
         self.G = cn.G
         self.uid = uid
+        self.fullness=fullness
         self.num_channels = num_channels
         self.deposit_per_channel = deposit_per_channel
         self.channels = {}

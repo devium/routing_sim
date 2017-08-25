@@ -3,8 +3,13 @@ from collections import namedtuple, defaultdict
 
 import bpy
 
-from settings import ANIMATION_FILE, ANIMATION_LENGTH_SHOW, \
-    ANIMATION_LENGTH_FLASH, ANIMATION_LENGTH_HIDE, ANIMATION_DEPTH
+from settings import (
+    ANIMATION_FILE,
+    ANIMATION_LENGTH_SHOW,
+    ANIMATION_LENGTH_FLASH,
+    ANIMATION_LENGTH_HIDE,
+    ANIMATION_DEPTH
+)
 
 
 def to_pass_index(active_progress, hidden_progress):
