@@ -45,6 +45,16 @@ def reset_progress(except_=None):
     print('Reset {} objects.'.format(len(objs)))
 
 
+def get_curve_mappings():
+    """
+    Return curve mapping for (node, channel).
+    """
+    return (
+        bpy.data.materials['Material.Network.Node'].node_tree.nodes['RGB Curves'],
+        bpy.data.materials['Material.Network.Channel'].node_tree.nodes['RGB Curves']
+    )
+
+
 class Animator:
     def __init__(self):
         with open(ANIMATION_FILE) as animation_file:
@@ -71,7 +81,12 @@ class Animator:
             'channel': 'Channel'
         }
 
+        # -2 because -1 to 0 might be mistaken as an incremental update.
         self.last_frame = -2
+
+        node_curve, channel_curve = get_curve_mappings()
+        node_curve.mapping.initialize()
+        channel_curve.mapping.initialize()
 
         bpy.app.handlers.frame_change_pre.clear()
         bpy.app.handlers.frame_change_pre.append(self.on_frame)
@@ -109,8 +124,7 @@ class Animator:
             print('Jumping frame. Replaying {} animations.'.format(len(current_animations)))
 
         # We need the curve mappings to find out which transfer is currently brightest.
-        node_curve = bpy.data.materials['Material.Network.Node'].node_tree.nodes['RGB Curves']
-        channel_curve = bpy.data.materials['Material.Network.Channel'].node_tree.nodes['RGB Curves']
+        node_curve, channel_curve = get_curve_mappings()
         type_to_active_curve = {
             'node': node_curve.mapping.curves[0],
             'channel': channel_curve.mapping.curves[0]
@@ -172,8 +186,6 @@ class Animator:
 
                 if hidden_progress == -1:
                     hidden_progress = current_hidden_progress
-                    # TODO: REMOVE
-                    print('progress == -1 for {} {}'.format(element_type, element_id))
 
                 if hidden_progress > 0.99:
                     obj.hide = True
