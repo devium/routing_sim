@@ -1,7 +1,7 @@
 import sys
 import os
 
-simulation_dir = PATH TO SIMULATION BLENDER DIR HERE
+simulation_dir = 'PATH TO SIMULATION BLENDER DIRECTORY HERE'
 os.chdir(simulation_dir)
 if simulation_dir not in sys.path:
     sys.path.insert(0, simulation_dir)

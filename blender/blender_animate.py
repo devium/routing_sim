@@ -152,10 +152,19 @@ class Animator:
                 if animation.transfer_id != animation_state[2]:
                     # If there are multiple active transfers, take the brightest one.
                     curve = type_to_active_curve[animation.element_type]
+
+                    # We lose precision when converting to discrete progress. We have to take that
+                    # into account when emulating brightness.
+                    dprogress_stored = int(animation_state[0] * ANIMATION_DEPTH) / ANIMATION_DEPTH
+                    dprogress_new = int(active_progress * ANIMATION_DEPTH) / ANIMATION_DEPTH
+                    brightness_stored = curve.evaluate(dprogress_stored)
+                    brightness_new = curve.evaluate(dprogress_new)
+
                     active_progress = max(
-                        (curve.evaluate(animation_state[0]), animation_state[0]),
-                        (curve.evaluate(active_progress), active_progress)
+                        (brightness_stored, animation_state[0]),
+                        (brightness_new, active_progress)
                     )[1]
+
                 animation_state[0] = active_progress
             if hidden_progress != -1:
                 animation_state[1] = hidden_progress
