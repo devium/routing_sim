@@ -24,7 +24,7 @@ class ParetoDistribution(object):
 
 
 class CircleDistribution(object):
-    def __init__(self, min_value, max_value):
+    def __init__(self, min_value=0, max_value=1):
         """
         Quarter-circle distribution. Can also be used as the height of a point on the surface of a
         semisphere for an even surface distribution.

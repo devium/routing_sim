@@ -54,12 +54,12 @@ class ChannelNetwork(object):
         del_nodes = []
         for node in self.nodes:
             if not node.channels:
-                print "not connected", node
+                print("not connected", node)
                 del_nodes.append(node)
                 self.nodeids.remove(node.uid)
                 del self.node_by_id[node.uid]
             elif len(node.channels) < 2:
-                print "weakly connected", node
+                print("weakly connected", node)
 
         self.nodes = [node for node in self.nodes if node not in del_nodes]
 
@@ -182,9 +182,9 @@ class ChannelNetwork(object):
 
         # Assume direct entrypoint into target sector.
         for helper in helpers:
-            print 'Trying to route through helper %d +/- %d to %d.' % (helper.center,
-                                                                       int(helper.range / 2),
-                                                                       target.uid)
+            print('Trying to route through helper {} +/- {} to {}.'.format(
+                helper.center, int(helper.range / 2), target.uid
+            ))
             path = helper.find_path(source, target, value)
             if path:
                 return path, helper
