@@ -8,7 +8,9 @@ from settings import (
     ANIMATION_LENGTH_SHOW,
     ANIMATION_LENGTH_FLASH,
     ANIMATION_LENGTH_HIDE,
-    ANIMATION_DEPTH
+    ANIMATION_DEPTH,
+    NODES_DEFAULT_VISIBLE,
+    CHANNELS_DEFAULT_VISIBLE,
 )
 
 
@@ -28,26 +30,48 @@ def to_pass_index(active_progress, hidden_progress):
 
 
 def from_pass_index(pass_index):
+    """
+    Returns (active_progress, hidden_progress).
+    """
     return pass_index // ANIMATION_DEPTH / (ANIMATION_DEPTH - 1), \
            pass_index % ANIMATION_DEPTH / (ANIMATION_DEPTH - 1)
 
 
-def reset_progress(except_=None):
+def reset_progress(channels_popup, except_=None):
     if not except_:
         except_ = set()
 
-    objs = [
+    node_objs = [
         obj for obj in bpy.data.objects
-        if ('Object.Network.Node' in obj.name or 'Object.Network.Channel' in obj.name) and
-        obj.name[15:] not in except_
+        if 'Object.Network.Node' in obj.name and obj.name[15:] not in except_
     ]
 
-    for obj in objs:
-        obj.hide = True
-        obj.hide_render = True
-        obj.pass_index = to_pass_index(0, 1)
+    channel_objs = [
+        obj for obj in bpy.data.objects
+        if 'Object.Network.Channel' in obj.name and obj.name[15:] not in except_
+    ]
 
-    print('Reset {} objects.'.format(len(objs)))
+    for obj in node_objs:
+        if not channels_popup and NODES_DEFAULT_VISIBLE:
+            obj.hide = False
+            obj.hide_render = False
+            obj.pass_index = to_pass_index(0, 0)
+        else:
+            obj.hide = True
+            obj.hide_render = True
+            obj.pass_index = to_pass_index(0, 1)
+
+    for obj in channel_objs:
+        if not channels_popup and CHANNELS_DEFAULT_VISIBLE:
+            obj.hide = False
+            obj.hide_render = False
+            obj.pass_index = to_pass_index(0, 0)
+        else:
+            obj.hide = True
+            obj.hide_render = True
+            obj.pass_index = to_pass_index(0, 1)
+
+    print('Reset {} objects.'.format(len(node_objs) + len(channel_objs)))
 
 
 def get_curve_mappings():
@@ -68,8 +92,15 @@ def evaluate_curve_discrete(curve, value):
 
 class Animator:
     def __init__(self):
+        self.channels_popup = True
         with open(ANIMATION_FILE) as animation_file:
-            animations = json.load(animation_file)
+            content = json.load(animation_file)
+            if isinstance(content, list):
+                # Legacy format.
+                animations = content
+            else:
+                self.channels_popup = content['channels_popup']
+                animations = content['animations']
 
         Animation = namedtuple('Animation', [
             'time',
@@ -80,6 +111,11 @@ class Animator:
         ])
 
         self.animations = [Animation(*animation) for animation in animations]
+        if not self.channels_popup:
+            self.animations = [
+                animation for animation in self.animations
+                if animation.animation_type != 'show' and animation.animation_type != 'hide'
+            ]
 
         self.animation_type_to_length = {
             'show': ANIMATION_LENGTH_SHOW,
@@ -144,6 +180,10 @@ class Animator:
             'node': node_curve.mapping.curves[1],
             'channel': channel_curve.mapping.curves[1]
         }
+        type_to_visible = {
+            'node': NODES_DEFAULT_VISIBLE,
+            'channel': CHANNELS_DEFAULT_VISIBLE
+        }
 
         type_to_id_to_mat_update = defaultdict(lambda: defaultdict(lambda: [0, 0, 0]))
         for animation in current_animations:
@@ -183,7 +223,7 @@ class Animator:
                 for element_id in id_to_mat_update.keys()
             }
             print('Avoided reset on {} updated objects.'.format(len(except_)))
-            reset_progress(except_)
+            reset_progress(self.channels_popup, except_)
 
         # Time for actual updates.
         num_updates = 0
@@ -200,16 +240,25 @@ class Animator:
                 obj = bpy.data.objects['Object.Network.' + name]
                 current_active_progress, current_hidden_progress = from_pass_index(obj.pass_index)
 
+                hidden = False
                 if active_progress == -1:
                     active_progress = current_active_progress
+                if not type_to_visible[element_type]:
+                    active_mix = evaluate_curve_discrete(
+                        type_to_active_curve[element_type], active_progress
+                    )
+                    if active_mix < 0.05:
+                        hidden = True
 
                 if hidden_progress == -1:
                     hidden_progress = current_hidden_progress
-
                 hidden_mix = evaluate_curve_discrete(
                     type_to_hidden_curve[element_type], hidden_progress
                 )
                 if hidden_mix > 0.95:
+                    hidden = True
+
+                if hidden:
                     obj.hide = True
                     obj.hide_render = True
                 else:

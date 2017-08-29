@@ -12,10 +12,11 @@ from raidensim.network.channel_network import ChannelNetwork
 from raidensim.draw import calc3d_positions
 
 # Network topology parameters.
-NUM_NODES = 200
+NUM_NODES = 1000
 MIN_CHANNELS = 2
 MAX_CHANNELS = 10
 TOP_HOLE_RADIUS = 0.2
+CHANNELS_POPUP = False
 
 # Animation settings. Base unit = seconds.
 ANIMATION_LENGTH = 30.0
@@ -23,7 +24,7 @@ TRANSFER_HOP_DELAY = 0.08
 SIMULATION_STEP_SIZE = 0.01
 
 POPUP_FREQ_MAX = 1000.0
-TRANSFER_FREQ_MAX = 30.0
+TRANSFER_FREQ_MAX = 200.0
 
 # Parameters for node fullness distribution (beta distribution). Applet:
 # http://homepage.divms.uiowa.edu/~mbognar/applets/beta.html
@@ -83,12 +84,13 @@ class AnimationGenerator(object):
             popup_curve_points = []
             transfer_curve_points = []
 
-        self.popup_curve = CurveEditor(
-            points=popup_curve_points,
-            title='Channel Popup Frequency (max = {}).'.format(POPUP_FREQ_MAX),
-            xmin=0, xmax=ANIMATION_LENGTH,
-            ymin=0, ymax=POPUP_FREQ_MAX
-        )
+        if CHANNELS_POPUP:
+            self.popup_curve = CurveEditor(
+                points=popup_curve_points,
+                title='Channel Popup Frequency (max = {}).'.format(POPUP_FREQ_MAX),
+                xmin=0, xmax=ANIMATION_LENGTH,
+                ymin=0, ymax=POPUP_FREQ_MAX
+            )
 
         self.transfer_curve = CurveEditor(
             points=transfer_curve_points,
@@ -99,7 +101,10 @@ class AnimationGenerator(object):
 
         with open(curves_path, 'w') as curves_file:
             json.dump(
-                {'popup': self.popup_curve.points, 'transfer': self.transfer_curve.points},
+                {
+                    'popup': self.popup_curve.points if CHANNELS_POPUP else popup_curve_points,
+                    'transfer': self.transfer_curve.points
+                },
                 curves_file
             )
 
@@ -132,23 +137,27 @@ class AnimationGenerator(object):
         # Note: this only removes edges from the network graph and doesn't affect recursive
         # routing.
         self.node_to_index = {node: index for index, node in enumerate(self.cn.nodes)}
-        self.hidden_nodes = set(range(len(self.cn.nodes)))
-        for i, channel in enumerate(self.channel_topology):
-            del self.cn.nodes[channel[0]].channels[self.cn.nodeids[channel[1]]]
-            del self.cn.nodes[channel[1]].channels[self.cn.nodeids[channel[0]]]
-            if self.cn.nodes[channel[0]] in self.cn.G.edge:
-                self.cn.G.remove_edge(self.cn.nodes[channel[0]], self.cn.nodes[channel[1]])
-            else:
-                self.cn.G.remove_edge(self.cn.nodes[channel[1]], self.cn.nodes[channel[0]])
-            self.hidden_channels.add(i)
+        if CHANNELS_POPUP:
+            self.hidden_nodes = set(range(len(self.cn.nodes)))
+            for i, channel in enumerate(self.channel_topology):
+                del self.cn.nodes[channel[0]].channels[self.cn.nodeids[channel[1]]]
+                del self.cn.nodes[channel[1]].channels[self.cn.nodeids[channel[0]]]
+                if self.cn.nodes[channel[0]] in self.cn.G.edge:
+                    self.cn.G.remove_edge(self.cn.nodes[channel[0]], self.cn.nodes[channel[1]])
+                else:
+                    self.cn.G.remove_edge(self.cn.nodes[channel[1]], self.cn.nodes[channel[0]])
+                self.hidden_channels.add(i)
+        else:
+            self.visible_nodes = set(range(len(self.cn.nodes)))
+            for i, channel in enumerate(self.channel_topology):
+                self.visible_channels.add(i)
+
 
     def generate_animation(self):
         # Generate node popup and channel transfer animations.
         print('Generating animation.')
         last_popup = 0.0
         last_transfer = 0.0
-        channel_popup_freq = 0
-        transfer_freq = 0
         tic = time.time()
         while self.time < ANIMATION_LENGTH:
             toc = time.time()
@@ -156,14 +165,16 @@ class AnimationGenerator(object):
                 tic = toc
                 print('Animation progress: {:.2f}/{:.2f}'.format(self.time, ANIMATION_LENGTH))
 
-            channel_popup_freq = self.popup_curve.evaluate(self.time)
-            channel_popup_delta = 1.0 / channel_popup_freq if channel_popup_freq else 1000000
-            transfer_freq = self.transfer_curve.evaluate(self.time)
-            transfer_delta = 1.0 / transfer_freq if transfer_freq else 1000000
+            if CHANNELS_POPUP:
+                channel_popup_freq = self.popup_curve.evaluate(self.time)
+                channel_popup_delta = 1.0 / channel_popup_freq if channel_popup_freq else 1e12
 
-            while self.hidden_channels and self.time - last_popup >= channel_popup_delta:
-                last_popup += channel_popup_delta
-                self.create_channels(1, connected_only=bool(self.animations))
+                while self.hidden_channels and self.time - last_popup >= channel_popup_delta:
+                    last_popup += channel_popup_delta
+                    self.create_channels(1, connected_only=bool(self.animations))
+
+            transfer_freq = self.transfer_curve.evaluate(self.time)
+            transfer_delta = 1.0 / transfer_freq if transfer_freq else 1e12
 
             while len(self.visible_nodes) >= 2 and self.time - last_transfer >= transfer_delta:
                 last_transfer += transfer_delta
@@ -174,7 +185,11 @@ class AnimationGenerator(object):
         print('Last channel popup at {}'.format(last_popup))
 
         with open(os.path.join(OUTDIR, 'animation.json'), 'w') as animation_file:
-            json.dump(self.animations, animation_file, indent=2)
+            content = {
+                'channels_popup': CHANNELS_POPUP,
+                'animations': self.animations
+            }
+            json.dump(content, animation_file, indent=2)
 
     def popup_channels(self, channels):
         """
