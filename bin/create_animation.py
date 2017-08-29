@@ -12,7 +12,7 @@ from raidensim.network.channel_network import ChannelNetwork
 from raidensim.draw import calc3d_positions
 
 # Network topology parameters.
-NUM_NODES = 500
+NUM_NODES = 200
 MIN_CHANNELS = 2
 MAX_CHANNELS = 10
 TOP_HOLE_RADIUS = 0.2
@@ -22,15 +22,15 @@ ANIMATION_LENGTH = 30.0
 TRANSFER_HOP_DELAY = 0.08
 SIMULATION_STEP_SIZE = 0.01
 
-POPUP_FREQ_MAX = 100.0
-TRANSFER_FREQ_MAX = 50.0
+POPUP_FREQ_MAX = 1000.0
+TRANSFER_FREQ_MAX = 30.0
 
 # Parameters for node fullness distribution (beta distribution). Applet:
 # http://homepage.divms.uiowa.edu/~mbognar/applets/beta.html
 FULLNESS_BETA_A = 1.1
 FULLNESS_BETA_B = 5
-DISTRIBUTION = BetaDistribution(FULLNESS_BETA_A, FULLNESS_BETA_B)
-# DISTRIBUTION = CircleDistribution()
+# DISTRIBUTION = BetaDistribution(FULLNESS_BETA_A, FULLNESS_BETA_B)
+DISTRIBUTION = CircleDistribution()
 
 TRANSFER_ATTEMPTS_MAX = 10
 TRANSFER_VALUE = 1
@@ -157,9 +157,9 @@ class AnimationGenerator(object):
                 print('Animation progress: {:.2f}/{:.2f}'.format(self.time, ANIMATION_LENGTH))
 
             channel_popup_freq = self.popup_curve.evaluate(self.time)
-            channel_popup_delta = 1.0 / channel_popup_freq
+            channel_popup_delta = 1.0 / channel_popup_freq if channel_popup_freq else 1000000
             transfer_freq = self.transfer_curve.evaluate(self.time)
-            transfer_delta = 1.0 / transfer_freq
+            transfer_delta = 1.0 / transfer_freq if transfer_freq else 1000000
 
             while self.hidden_channels and self.time - last_popup >= channel_popup_delta:
                 last_popup += channel_popup_delta

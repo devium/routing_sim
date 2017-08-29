@@ -60,6 +60,12 @@ def get_curve_mappings():
     )
 
 
+def evaluate_curve_discrete(curve, value):
+    # We lose precision when converting to discrete progress. We have to take that
+    # into account when emulating curve mappings.
+    return curve.evaluate(int(value * ANIMATION_DEPTH) / ANIMATION_DEPTH)
+
+
 class Animator:
     def __init__(self):
         with open(ANIMATION_FILE) as animation_file:
@@ -134,6 +140,10 @@ class Animator:
             'node': node_curve.mapping.curves[0],
             'channel': channel_curve.mapping.curves[0]
         }
+        type_to_hidden_curve = {
+            'node': node_curve.mapping.curves[1],
+            'channel': channel_curve.mapping.curves[1]
+        }
 
         type_to_id_to_mat_update = defaultdict(lambda: defaultdict(lambda: [0, 0, 0]))
         for animation in current_animations:
@@ -152,13 +162,8 @@ class Animator:
                 if animation.transfer_id != animation_state[2]:
                     # If there are multiple active transfers, take the brightest one.
                     curve = type_to_active_curve[animation.element_type]
-
-                    # We lose precision when converting to discrete progress. We have to take that
-                    # into account when emulating brightness.
-                    dprogress_stored = int(animation_state[0] * ANIMATION_DEPTH) / ANIMATION_DEPTH
-                    dprogress_new = int(active_progress * ANIMATION_DEPTH) / ANIMATION_DEPTH
-                    brightness_stored = curve.evaluate(dprogress_stored)
-                    brightness_new = curve.evaluate(dprogress_new)
+                    brightness_stored = evaluate_curve_discrete(curve, animation_state[0])
+                    brightness_new = evaluate_curve_discrete(curve, active_progress)
 
                     active_progress = max(
                         (brightness_stored, animation_state[0]),
@@ -201,7 +206,10 @@ class Animator:
                 if hidden_progress == -1:
                     hidden_progress = current_hidden_progress
 
-                if hidden_progress > 0.99:
+                hidden_mix = evaluate_curve_discrete(
+                    type_to_hidden_curve[element_type], hidden_progress
+                )
+                if hidden_mix > 0.95:
                     obj.hide = True
                     obj.hide_render = True
                 else:
