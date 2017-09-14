@@ -19,19 +19,19 @@ TOP_HOLE_RADIUS = 0.2
 CHANNELS_POPUP = False
 
 # Animation settings. Base unit = seconds.
-ANIMATION_LENGTH = 30.0
+ANIMATION_LENGTH = 10.0
 TRANSFER_HOP_DELAY = 0.08
 SIMULATION_STEP_SIZE = 0.01
 
-POPUP_FREQ_MAX = 1000.0
+POPUP_FREQ_MAX = 200.0
 TRANSFER_FREQ_MAX = 200.0
 
 # Parameters for node fullness distribution (beta distribution). Applet:
 # http://homepage.divms.uiowa.edu/~mbognar/applets/beta.html
 FULLNESS_BETA_A = 1.1
 FULLNESS_BETA_B = 5
-# DISTRIBUTION = BetaDistribution(FULLNESS_BETA_A, FULLNESS_BETA_B)
-DISTRIBUTION = CircleDistribution()
+DISTRIBUTION = BetaDistribution(FULLNESS_BETA_A, FULLNESS_BETA_B)
+# DISTRIBUTION = CircleDistribution()
 
 TRANSFER_ATTEMPTS_MAX = 10
 TRANSFER_VALUE = 1

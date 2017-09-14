@@ -71,7 +71,7 @@ class ChannelNetwork(object):
         else:
             self.G.add_edge(B, A)
 
-    def ring_distance(self, node_a, node_b):
+    def ring_distance(self, node_a: int, node_b: int):
         return min((node_a - node_b) % self.max_id, (node_b - node_a) % self.max_id)
 
     def get_closest_node_id(self, target_id, filter=None):
@@ -104,14 +104,8 @@ class ChannelNetwork(object):
                 ridx, rid = get_next(ridx, inc=1)
 
     @staticmethod
-    def _get_path_cost_function(value, hop_cost=1):
-        """
-        goal: from all possible paths, choose from the shortes with enough capacity
-        """
-
+    def _get_path_cost_function_constant_fees(value, hop_cost=1):
         def cost_func_fast(a, b, _account):
-            # this func should be as fast as possible, as it's called often
-            # don't alloc memory
             sign = 1 if a.uid < b.uid else -1
             capacity = _account[a.uid] + sign * _account['balance']
             assert capacity >= 0
@@ -122,13 +116,25 @@ class ChannelNetwork(object):
         return cost_func_fast
 
     @staticmethod
-    def _get_path_cost_function_imbalance_fees(value):
+    def _get_path_cost_function_balance_fees(value):
         def cost_func_fees(a, b, _account):
-            # this func should be as fast as possible, as it's called often
-            # don't alloc memory
             sign = 1 if a.uid < b.uid else -1
             capacity = _account[a.uid] + sign * _account['balance']
-            # assert capacity >= 0
+            if capacity < value:
+                return None
+
+            # Positive imbalance <=> a has a higher capacity than b.
+            balance = abs(_account['balance'])
+            # Sigmoid function.
+            return 1 - 1 / (1 + math.exp(-balance))
+
+        return cost_func_fees
+
+    @staticmethod
+    def _get_path_cost_function_imbalance_fees(value):
+        def cost_func_fees(a, b, _account):
+            sign = 1 if a.uid < b.uid else -1
+            capacity = _account[a.uid] + sign * _account['balance']
             if capacity < value:
                 return None
 
@@ -140,14 +146,15 @@ class ChannelNetwork(object):
 
         return cost_func_fees
 
-    def find_path_global(self, source, target, value, path_cost_mode='constant'):
-        assert isinstance(source, Node)
-        assert isinstance(target, Node)
-        path_cost_func = None
+    def find_path_global(self, source: Node, target: Node, value, path_cost_mode='constant'):
         if path_cost_mode == 'constant':
-            path_cost_func = self._get_path_cost_function(value)
+            path_cost_func = self._get_path_cost_function_constant_fees(value)
+        elif path_cost_mode == 'balance':
+            path_cost_func = self._get_path_cost_function_balance_fees(value)
         elif path_cost_mode == 'imbalance':
             path_cost_func = self._get_path_cost_function_imbalance_fees(value)
+        else:
+            raise ValueError('Unsupported fee model.')
         try:
             path = dijkstra_path(
                 self.G, source, target, path_cost_func
@@ -156,21 +163,26 @@ class ChannelNetwork(object):
         except nx.NetworkXNoPath:
             return None
 
-    def find_path_recursively(self, source, target, value):
-        assert isinstance(source, Node)
-        assert isinstance(target, Node)
-        contacted = 0
-        for max_hops in (5, 10, 15, 50):  # breath first possible
+    def find_path_recursively(self, source: Node, target: Node, value, hop_limits=None):
+        contacted = set()
+        if not hop_limits:
+            hop_limits = [100]
+
+        path = None
+        for max_hops in hop_limits:  # breath first possible
+            print('Attempting to find path with a max of {} hops.'.format(max_hops))
             c, path = source.find_path_recursively(target.uid, value, max_hops)
-            contacted += c
+            contacted |= c
             if path:
                 break
+
         if path:
             assert len(path) == len(set(path))  # no node visited twice
             return contacted, path + [target]
+
         return contacted, []
 
-    def find_path_with_helper(self, source, target, value):
+    def find_path_with_helper(self, source: Node, target: Node, value):
         """
         Find a path to the target using pathfinding helpers that know about channel balances in
         the target address sector.

@@ -1,4 +1,5 @@
 from raidensim.network.channel_view import ChannelView
+import heapq
 
 
 class Node(object):
@@ -82,44 +83,62 @@ class Node(object):
         return True, 'OK'
 
     def _channels_by_distance(self, target_id, value):
-        # FIXME
+        partners = sorted(
+            self.channels.keys(), key=lambda partner: self.cn.ring_distance(target_id, partner)
+        )
+        return [partner for partner in partners if self.channels[partner].capacity >= value]
 
-        max_id = self.cn.max_id
-
-        def _distance(cv):
-            a, b = target_id, cv.partner
-            d = abs(a - b)
-            if d > max_id / 2:
-                d = abs(max_id - d)
-            return d
-
-        cvs = sorted(self.channels, lambda a, b: cmp(_distance(a), _distance(b)))
-        assert len(cvs) < 2 or _distance(cvs[0]) <= _distance(cvs[-1])
-        return [cv for cv in cvs if cv.capacity >= value]
-
-    def find_path_recursively(self, target_id, value, max_hops=50, visited=[]):
-        # FIXME
+    def find_path_recursively(self, target_id, value, max_hops=50, visited=None):
         """
         sort channels by distance to target, filter by capacity
-        setting a low max_hops allows to implment breath first, yielding in shorter paths
+        setting a low max_hops allows to implement breadth first, yielding shorter paths
         """
-        contacted = 0  # how many nodes have been contacted
+        contacted = {self}  # which nodes have been contacted
+        if visited is None:
+            visited = []
         if self in visited:
-            return 0, []
-        for cv in self._channels_by_distance(target_id, value):
-            if cv.partner == target_id:  # if can reach target return [self]
-                return 0, [self]
+            return set(), []
+        for partner in self._channels_by_distance(target_id, value):
+            node = self.cn.node_by_id[partner]
+            if partner == target_id:  # if can reach target return [self]
+                return {node}, [self]
             if len(visited) == max_hops:
                 return contacted, []  # invalid
-            node = self.cn.node_by_id[cv.partner]
             try:
+                contacted.add(node)
                 c, path = node.find_path_recursively(target_id, value, max_hops, visited + [self])
-                contacted += 1 + c
+                contacted |= c
                 if path:
                     return contacted, [self] + path
             except RuntimeError:  # recursion limit
                 pass
         return contacted, []  # could not find path
+
+    def find_path_bfs(self, target_id, value):
+        """
+        Modified BFS using a distance-to-target-based priority queue instead of a normal queue.
+        Queue elements are paths prioritized by their distance from the target.
+        """
+        i = 0
+        queue = [(self.cn.ring_distance(self.uid, target_id), i, [self])]
+        visited = {self}
+
+        while queue:
+            distance, order, path = heapq.heappop(queue)
+            node = path[-1]
+            visited.add(node)
+            if node.uid == target_id:
+                return visited, path
+
+            for cv in node.channels.values():
+                partner = self.cn.node_by_id[cv.partner]
+                if partner not in visited and cv.capacity >= value:
+                    new_path = path + [partner]
+                    i += 1
+                    queue_entry = (self.cn.ring_distance(cv.partner, target_id), i, new_path)
+                    heapq.heappush(queue, queue_entry)
+
+        return visited, []
 
 
 class FullNode(Node):

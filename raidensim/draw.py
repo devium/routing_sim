@@ -6,11 +6,9 @@ from collections import defaultdict
 import numpy as np
 
 
-def calc_positions(cn):
+def calc_positions(nodes, max_id, min_deposit, max_deposit):
     """helper to position nodes on a 2d plane as a circle"""
     positions = dict()
-    max_deposit = max(n.deposit_per_channel for n in cn.nodes)
-    min_deposit = min(n.deposit_per_channel for n in cn.nodes)
     _range = float(max_deposit - min_deposit)
 
     def scale(node):
@@ -18,8 +16,8 @@ def calc_positions(cn):
         factor = (node.deposit_per_channel - min_deposit) / _range  # 1 for max deposit
         return 2 / (factor + 1)
 
-    for node in cn.nodes:
-        rad = 2 * math.pi * node.uid / float(cn.max_id)
+    for node in nodes:
+        rad = 2 * math.pi * node.uid / float(max_id)
         x, y = math.sin(rad), math.cos(rad)
         s = scale(node)
         positions[node] = x * s, y * s
@@ -79,15 +77,20 @@ def path_to_edges(cn, path):
     return edges
 
 
-def draw2d(cn, path=None, helper_highlight=None):
+def draw2d(cn, path=None, highlighted_nodes=None, helper_highlight=None):
     from matplotlib.patches import Wedge
     from colorsys import hsv_to_rgb
     edge_color = '#eeeeee'
-    pos = calc_positions(cn)
+
+    max_deposit = max(n.deposit_per_channel for n in cn.nodes)
+    min_deposit = min(n.deposit_per_channel for n in cn.nodes)
+    pos = calc_positions(cn.nodes, cn.max_id, min_deposit, max_deposit)
 
     plt.clf()
     fig = plt.gcf()
+    fig.set_size_inches(8, 8)
     ax = fig.add_subplot(111)
+    ax.axis('off')
 
     for helper in cn.helpers:
         # Angles start at (1,0) ccw, node IDs at (0,1) cw.
@@ -107,34 +110,59 @@ def draw2d(cn, path=None, helper_highlight=None):
     if path:
         nx.draw_networkx_edges(cn.G, pos, edgelist=path_to_edges(cn, path), edge_color='r')
 
+    if highlighted_nodes:
+        nx.draw_networkx_nodes(
+            cn.G, pos, nodelist=highlighted_nodes, node_shape='x', node_size=12, node_color='b'
+        )
+
     plt.show()
 
 
 def plot_channel_distribution(cn, ax):
     num_channels = [len(node.channels) for node in cn.nodes]
     max_ = max(num_channels)
-    ax.hist(num_channels, bins=range(max_ + 1), align='right', edgecolor='black')
+    ax.hist(num_channels, bins=range(max_ + 2), align='left', edgecolor='black')
     ax.xaxis.set_ticks(np.arange(0, max_ + 1, 2))
     ax.xaxis.set_ticks(np.arange(1, max_ + 1, 2), minor=True)
     ax.grid(True)
 
 
-def plot_channel_capacities(cn, ax, num_bins=25):
+def plot_channel_capacities(cn, ax, max_, num_bins=50, log=False):
     capacities = [cv.capacity for node in cn.nodes for cv in node.channels.values()]
-    ax.hist(capacities, bins=num_bins, edgecolor='black', log=True, range=(0, max(capacities) + 1))
+    ax.hist(
+        capacities,
+        bins=num_bins,
+        edgecolor='black',
+        range=[0, max_],
+        log=log
+    )
     ax.grid(True)
 
 
-def plot_channel_imbalances(cn, ax, num_bins=25):
+def plot_channel_balances(cn, ax, max_, num_bins=50, log=False):
+    balances = defaultdict(int)
+    for node in cn.nodes:
+        for cv in node.channels.values():
+            balances[frozenset([node.uid, cv.partner])] = abs(cv.balance)
+
+    balances = list(balances.values())
+    ax.hist(balances, bins=num_bins, range=[0, max_], log=log, edgecolor='black')
+    ax.grid(True)
+
+    # Return variance of balances.
+    return sum(balance * balance for balance in balances) / len(balances)
+
+
+def plot_channel_imbalances(cn, ax, max_, num_bins=50, log=False):
     imbalances = defaultdict(int)
     for node in cn.nodes:
         for cv in node.channels.values():
             imbalances[frozenset([node.uid, cv.partner])] = \
                 abs(cv.deposit - cv.partner_deposit + 2 * cv.balance)
 
-    imbalances = imbalances.values()
-    ax.hist(imbalances, bins=num_bins, edgecolor='black', log=True)
+    imbalances = list(imbalances.values())
+    ax.hist(imbalances, bins=num_bins, range=[0, max_], edgecolor='black', log=log)
     ax.grid(True)
 
-    # Return "mean squared error" of imbalances.
+    # Return variance of imbalances.
     return sum(imbalance * imbalance for imbalance in imbalances) / len(imbalances)

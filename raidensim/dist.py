@@ -17,6 +17,9 @@ class ParetoDistribution(object):
         self.a = a
         self.min_value = min_value
         self.max_value = max_value
+        self.reset()
+
+    def reset(self):
         np.random.seed(0)
 
     def random(self):
@@ -31,6 +34,9 @@ class CircleDistribution(object):
         """
         self.min_value = min_value
         self.max_value = max_value
+        self.reset()
+
+    def reset(self):
         np.random.seed(0)
 
     def random(self):
@@ -49,6 +55,9 @@ class BetaDistribution(object):
         self.b = b
         self.min_value = min_value
         self.max_value = max_value
+        self.reset()
+
+    def reset(self):
         np.random.seed(0)
 
     def random(self):

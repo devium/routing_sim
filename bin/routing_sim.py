@@ -44,8 +44,10 @@ import sys
 
 import time
 
-from raidensim.config import ParetoNetworkConfiguration
-from raidensim.draw import plot_channel_imbalances, plot_channel_distribution
+from raidensim.config import NetworkConfiguration
+from raidensim.dist import ParetoDistribution, BetaDistribution
+from raidensim.draw import plot_channel_imbalances, plot_channel_distribution, \
+    plot_channel_balances
 from raidensim.network.channel_network import ChannelNetwork
 from raidensim.network.node import Node
 
@@ -72,7 +74,7 @@ def test_basic_channel():
 def setup_network(config):
     cn = ChannelNetwork()
     cn.generate_nodes(config)
-    cn.generate_helpers(config)
+    # cn.generate_helpers(config)
     cn.connect_nodes()
     return cn
 
@@ -83,46 +85,73 @@ def test_basic_network(config):
 
 
 def test_global_pathfinding(config, num_paths=10, value=2):
+    config.fullness_dist.reset()
+    random.seed(0)
+
     cn = setup_network(config)
     draw(cn)
+
     for i in range(num_paths):
-        print "-" * 40
+        print("-" * 40)
         source, target = random.sample(cn.nodes, 2)
 
+        print('Global path finding:')
         path = cn.find_path_global(source, target, value)
-        print len(path), path
-        draw(cn, path)
-
-        contacted, path = cn.find_path_recursively(source, target, value)
-        print len(path), path, contacted
-        draw(cn, path)
-
-        path, helper = cn.find_path_with_helper(source, target, value)
         if path:
-            print len(path), path
+            print('Found path of length {}: {}'.format(len(path), path))
         else:
-            print 'No direct path to target sector.'
-        draw(cn, path, helper)
+            print('No path found.')
+        draw(cn, path)
+
+        # print('Recursive path finding:')
+        # contacted, path = cn.find_path_recursively(source, target, value, [5, 10, 20, 50])
+        # if path:
+        #     print('Found path of length {}: {}'.format(len(path), path))
+        # else:
+        #     print('No path found.')
+        # print('Contacted {} nodes in the process: {}'.format(len(contacted), contacted))
+        # draw(cn, path, contacted)
+
+        print('BFS path finding:')
+        visited, path = source.find_path_bfs(target.uid, value)
+        if path:
+            print('Found path of length {}: {}'.format(len(path), path))
+        else:
+            print('No path found.')
+        print('Contacted {} nodes in the process: {}'.format(len(visited), visited))
+        draw(cn, path, visited)
+
+        # print('Path finding with helpers.')
+        # path, helper = cn.find_path_with_helper(source, target, value)
+        # if path:
+        #     print(len(path), path)
+        # else:
+        #     print('No direct path to target sector.')
+        # draw(cn, path, None, helper)
 
 
 def test_balancing(config, num_transfers, transfer_value, path_cost):
     from raidensim.draw import plot_channel_capacities
     import matplotlib.pyplot as plt
 
+    random.seed(0)
+    config.fullness_dist.reset()
     cn = setup_network(config)
+    max_capacity = config.max_deposit * 2
 
-    fig, axs = plt.subplots(2, 3)
-    plot_channel_capacities(cn, axs[0][0])
-    mse_pre = plot_channel_imbalances(cn, axs[0][1])
-    plot_channel_distribution(cn, axs[0][2])
+    fig, axs = plt.subplots(2, 4)
+    fig.set_size_inches(16, 8)
+    plot_channel_capacities(cn, axs[0][0], max_capacity)
+    balance_var_pre = plot_channel_balances(cn, axs[0][1], config.max_deposit)
+    imbalance_var_pre = plot_channel_imbalances(cn, axs[0][2], max_capacity)
+    plot_channel_distribution(cn, axs[0][3])
 
     num_channels_uni = sum((len(edges) for edges in cn.G.edge.values()))
     print('Simulating {} transfers between {} nodes over {} bidirectional channels.'.format(
-        num_transfers, len(cn.nodes), num_channels_uni / 2
+        num_transfers, len(cn.nodes), num_channels_uni // 2
     ))
 
     failed = 0
-    random.seed(0)
     tic = time.time()
     for i in range(num_transfers):
         toc = time.time()
@@ -145,26 +174,36 @@ def test_balancing(config, num_transfers, transfer_value, path_cost):
             cn.do_transfer(path, transfer_value)
 
     print('Finished. {} transfers failed.'.format(failed))
-    plot_channel_capacities(cn, axs[1][0])
-    mse_post = plot_channel_imbalances(cn, axs[1][1])
+    plot_channel_capacities(cn, axs[1][0], max_capacity)
+    balance_var_post = plot_channel_balances(cn, axs[1][1], config.max_deposit)
+    imbalance_var_post = plot_channel_imbalances(cn, axs[1][2], max_capacity)
 
     # Stats plot (labels only).
-    axs[1][2].text(0, 0.9, '{} nodes'.format(len(cn.nodes)))
-    axs[1][2].text(0, 0.8, '{} channels'.format(num_channels_uni / 2))
-    axs[1][2].text(0, 0.7, '{} transfers'.format(num_transfers))
-    axs[1][2].text(0, 0.6, 'Top row: initial network state')
-    axs[1][2].text(0, 0.5, 'Bottom row: after {} transfers'.format(num_transfers))
-    axs[1][2].text(0, 0.4, '{} transfers failed'.format(failed))
-    axs[1][2].text(0, 0.3, 'Fee model: {}'.format(path_cost))
-    axs[1][2].text(0, 0.2, 'Imbalance MSE before: {}'.format(mse_pre))
-    axs[1][2].text(0, 0.1, 'Imbalance MSE after: {}'.format(mse_post))
+    labels = [
+        'Nodes: {}'.format(len(cn.nodes)),
+        'Channels: {}'.format(num_channels_uni // 2),
+        'Transfers: {}'.format(num_transfers),
+        '',
+        'Top row: initial network state',
+        'Bottom row: after {} transfers'.format(num_transfers),
+        '',
+        'Fee model: {}'.format(path_cost),
+        'Failed transfers: {}'.format(failed),
+        'Balance variance before: {:.2f}'.format(balance_var_pre),
+        'Balance variance after: {:.2f}'.format(balance_var_post),
+        'Imbalance variance before: {:.2f}'.format(imbalance_var_pre),
+        'Imbalance variance after: {:.2f}'.format(imbalance_var_post)
+    ]
+    for i, label in enumerate(labels):
+        axs[1][3].text(0, 0.95 - i * 0.07, label)
 
     axs[0][0].set_ylabel('Distribution')
     axs[1][0].set_ylabel('Distribution')
     axs[1][0].set_xlabel('Channel capacity')
-    axs[1][1].set_xlabel('Channel imbalance')
-    axs[0][2].set_xlabel('Channel count per node')
-    axs[1][2].axis('off')
+    axs[1][1].set_xlabel('Channel balance (abs)')
+    axs[1][2].set_xlabel('Channel imbalance')
+    axs[0][3].set_xlabel('Channel count per node')
+    axs[1][3].axis('off')
 
     plt.show()
 
@@ -186,10 +225,10 @@ def test_cost_func_fees():
     assert abs(cost - 0.999) < 0.01
 
 
-def draw(cn, path=None, helper_highlight=None):
+def draw(cn, path=None, highlighted_nodes=None, helper_highlight=None):
     from raidensim.draw import draw2d as _draw
     assert isinstance(cn, ChannelNetwork)
-    _draw(cn, path, helper_highlight)
+    _draw(cn, path, highlighted_nodes, helper_highlight)
 
 
 ##########################################################
@@ -199,18 +238,17 @@ if __name__ == '__main__':
     test_basic_channel()
     test_cost_func_fees()
     # test_basic_network()
-    # test_global_pathfinding(ParetoNetworkConfiguration(1000, 0.6), num_paths=5, value=2)
-    config = ParetoNetworkConfiguration(
-        num_nodes=20,
-        a=0.6,
+    # fullness_dist = ParetoDistribution(5, 0, 1)
+    fullness_dist = BetaDistribution(0.5, 2)
+    config = NetworkConfiguration(
+        num_nodes=100,
+        fullness_dist=fullness_dist,
         min_channels=2,
         max_channels=10,
-        min_deposit=10,
+        min_deposit=4,
         max_deposit=100
     )
-    test_balancing(
-        config,
-        num_transfers=10000,
-        transfer_value=1,
-        path_cost='constant'
-    )
+    test_global_pathfinding(config, num_paths=3, value=5)
+    # test_balancing(config, num_transfers=10000, transfer_value=1, path_cost='constant')
+    # test_balancing(config, num_transfers=10000, transfer_value=1, path_cost='balance')
+    # test_balancing(config, num_transfers=10000, transfer_value=1, path_cost='imbalance')
