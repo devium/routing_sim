@@ -52,7 +52,6 @@ from raidensim.config import NetworkConfiguration
 from raidensim.dist import ParetoDistribution, BetaDistribution
 from raidensim.draw import draw2d
 from raidensim.network.channel_network import ChannelNetwork
-from raidensim.network.node import Node
 from raidensim.stat import get_channel_capacities, get_channel_net_balances, \
     get_channel_imbalances, get_channel_distribution
 
@@ -78,6 +77,8 @@ def simulate_pathfinding(config, num_paths=10, value=2):
     cn = setup_network(config)
     filename = 'routing_{}.png'.format(config.num_nodes)
     draw2d(cn, filepath=os.path.join(OUT_DIR, filename))
+    filename = 'routing_{}_labels.png'.format(config.num_nodes)
+    draw2d(cn, draw_labels=True, filepath=os.path.join(OUT_DIR, filename))
 
     for i in range(num_paths):
         print("-" * 40)
@@ -91,15 +92,6 @@ def simulate_pathfinding(config, num_paths=10, value=2):
             print('No path found.')
         filename = 'routing_{}_{}_global.png'.format(config.num_nodes, i)
         draw2d(cn, path, [path, [source, target]], filepath=os.path.join(OUT_DIR, filename))
-
-        # print('Recursive path finding:')
-        # contacted, path = cn.find_path_recursively(source, target, value, [5, 10, 20, 50])
-        # if path:
-        #     print('Found path of length {}: {}'.format(len(path), path))
-        # else:
-        #     print('No path found.')
-        # print('Contacted {} nodes in the process: {}'.format(len(contacted), contacted))
-        # draw(cn, path, contacted)
 
         print('BFS path finding:')
         _, path, path_history = source.find_path_bfs(target.uid, value)
@@ -245,14 +237,14 @@ if __name__ == '__main__':
     # fullness_dist = ParetoDistribution(5, 0, 1)
     fullness_dist = BetaDistribution(0.5, 2)
     config = NetworkConfiguration(
-        num_nodes=100,
+        num_nodes=500,
         fullness_dist=fullness_dist,
         min_channels=2,
         max_channels=10,
         min_deposit=4,
         max_deposit=100
     )
-    simulate_pathfinding(config, num_paths=3, value=5)
+    simulate_pathfinding(config, num_paths=1, value=5)
     # simulate_balancing(config, num_transfers=10000, transfer_value=1, fee_model='constant')
     # simulate_balancing(config, num_transfers=10000, transfer_value=1, fee_model='net-balance')
     # simulate_balancing(config, num_transfers=10000, transfer_value=1, fee_model='imbalance')

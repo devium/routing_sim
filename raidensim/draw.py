@@ -85,6 +85,7 @@ def draw2d(
         path: List[Node] = None,
         highlighted_nodes: List[List[Node]] = None,
         helper_highlight: PathFindingHelper=None,
+        draw_labels: bool=False,
         filepath: str=None
 ):
     from matplotlib.patches import Wedge
@@ -118,6 +119,10 @@ def draw2d(
     nx.draw_networkx(cn.G, pos, edge_color=edge_color, node_size=1, with_labels=False, ax=ax)
     if path:
         nx.draw_networkx_edges(cn.G, pos, edgelist=path_to_edges(cn, path), edge_color='r')
+
+    if draw_labels:
+        labels = {node: node.uid for node in cn.nodes}
+        nx.draw_networkx_labels(cn.G, pos, labels, font_size=6)
 
     if highlighted_nodes:
         colors = ['r', 'b', 'c', 'g']

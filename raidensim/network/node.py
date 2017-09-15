@@ -1,11 +1,11 @@
+import math
+from typing import Callable
+
 from raidensim.network.channel_view import ChannelView
 import heapq
 
 
 class Node(object):
-
-    min_deposit_deviation = 0.5  # accept up to X of own deposit
-
     def __init__(self, cn, uid, fullness=0, num_channels=0, deposit_per_channel=100):
         self.cn = cn
         self.G = cn.G
@@ -14,7 +14,6 @@ class Node(object):
         self.num_channels = num_channels
         self.deposit_per_channel = deposit_per_channel
         self.channels = {}
-        self.min_expected_deposit = self.min_deposit_deviation * self.deposit_per_channel
 
     def __repr__(self):
         return '<{}({} deposit:{} channels:{}/{})>'.format(
@@ -25,94 +24,80 @@ class Node(object):
     def partners(self):  # all partners
         return self.channels.keys()
 
-    @property
-    def targets(self):
+    def ring_distance(self, other: 'Node'):
+        return self.cn.ring_distance(self.uid, other.uid)
+
+    @staticmethod
+    def _node_request_filter(a: 'Node', b: 'Node'):
         """
-        geometrical distances with 1/3 of id space as max distance
+        a decides to connect to b if
+        1. not self
+        2. not already connected
+        3. b's deposit per channel is higher than a's
+        4. b is within the maximum channel distance
         """
-        distances = [self.cn.max_id / 2**i / 3 for i in range(self.num_channels)]
-        return [(self.uid + d) % self.cn.max_id for d in distances]
+        # a decides whether to connect to b.
+        return a.uid != b.uid and \
+               b.uid not in a.channels and \
+               b.deposit_per_channel >= a.deposit_per_channel and \
+               a.ring_distance(b) < a.cn.max_distance
+
+    @staticmethod
+    def _node_accept_filter(a: 'Node', b: 'Node'):
+        """
+        a decides to accept b if
+        1. not self
+        2. not already connected
+        3. b's deposit per channel is at least X% of a's
+        4. b is within the maximum channel distance
+        """
+        return a.uid != b.uid and \
+               b.uid not in a.channels and \
+               b.deposit_per_channel > 0.3 * a.deposit_per_channel and \
+               a.ring_distance(b) < a.cn.max_distance
 
     def initiate_channels(self):
-        # Only accept nodes with a certain minimum deposit per channel.
-        def node_filter(node):
-            return bool(node.deposit_per_channel > self.min_expected_deposit)
+        # Find target ID, i.e. IDs that are at desirable distances (regardless of actual nodes).
+        # Closer targets first, increasing exponentially up to a fraction of ID space.
+        # Repeating in cycles.
+        cycle_length = math.log(self.cn.max_distance, 2)
+        distances = [int(2**(i % cycle_length)) for i in range(self.num_channels)]
+        target_ids = [(self.uid + d) % self.cn.max_id for d in distances]
 
-        # Find closest node to target node that fits the filter and isn't already connected to us.
-        for target_id in self.targets:
-            reasons = []
-            for attempt, node_id in enumerate(
-                    self.cn.get_closest_node_ids(target_id, filter=node_filter)
-            ):
+        # Find closest nodes to targets that fit the filter.
+        for target_id in target_ids:
+            found = False
+            target_node_ids = self.cn.get_closest_node_ids(
+                target_id, filter=lambda other: Node._node_request_filter(self, other)
+            )
+            rejected = []
+            for attempt, node_id in enumerate(target_node_ids):
                 other = self.cn.node_by_id[node_id]
-                accepted1, reason1 = other.connect_requested(self)
-                accepted2, reason2 = self.connect_requested(other)
-                reasons.append(reason1 if not accepted1 else reason2)
-                if accepted1 and accepted2:
+                if Node._node_accept_filter(other, self):
                     self.cn.add_edge(self, other)
                     self.setup_channel(other)
                     other.setup_channel(self)
+                    found = True
                     break
-                if attempt > 10:
-                    print(
-                        'Failed to find a target node for node {} at {}. Reasons: {}'
-                        .format(self.uid, target_id, reasons)
-                    )
+                else:
+                    rejected.append(other.uid)
+                if attempt > 20:
                     break
 
-    def channel_view(self, other):
-        return ChannelView(self, other)
+            if not found:
+                print(
+                    'Failed to find a target node from {} viable nodes for node {} at {}. '\
+                    'Rejected by: {}'
+                    .format(len(target_node_ids), self.uid, target_id, rejected)
+                )
 
     def setup_channel(self, other):
         assert isinstance(other, Node)
         assert other.uid not in self.channels
-        cv = self.channel_view(other)
+        cv = ChannelView(self, other)
         cv.deposit = self.deposit_per_channel
         cv.balance = 0
         self.channels[other.uid] = cv
-
-    def connect_requested(self, other):
-        assert isinstance(other, Node)
-        if other.deposit_per_channel < self.min_expected_deposit:
-            # print "refused to connect", self, other, self.min_expected_deposit
-            return False, 'Deposit of {} too low.'.format(other.uid)
-        if other.uid in self.partners:
-            return False, 'Already connected.'
-        if other == self:
-            return False, 'Cannot connect to self.'
-        return True, 'OK'
-
-    def _channels_by_distance(self, target_id, value):
-        partners = sorted(
-            self.channels.keys(), key=lambda partner: self.cn.ring_distance(target_id, partner)
-        )
-        return [partner for partner in partners if self.channels[partner].capacity >= value]
-
-    def find_path_recursively(self, target_id, value, max_hops=50, visited=None):
-        """
-        sort channels by distance to target, filter by capacity
-        setting a low max_hops allows to implement breadth first, yielding shorter paths
-        """
-        contacted = {self}  # which nodes have been contacted
-        if visited is None:
-            visited = []
-        if self in visited:
-            return set(), []
-        for partner in self._channels_by_distance(target_id, value):
-            node = self.cn.node_by_id[partner]
-            if partner == target_id:  # if can reach target return [self]
-                return {node}, [self]
-            if len(visited) == max_hops:
-                return contacted, []  # invalid
-            try:
-                contacted.add(node)
-                c, path = node.find_path_recursively(target_id, value, max_hops, visited + [self])
-                contacted |= c
-                if path:
-                    return contacted, [self] + path
-            except RuntimeError:  # recursion limit
-                pass
-        return contacted, []  # could not find path
 
     def find_path_bfs(self, target_id, value, max_paths=100):
         """

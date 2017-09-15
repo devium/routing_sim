@@ -1,5 +1,6 @@
 import math
 import random
+from typing import Callable
 
 import networkx as nx
 import time
@@ -12,6 +13,8 @@ from raidensim.network.path_finding_helper import PathFindingHelper
 
 class ChannelNetwork(object):
     max_id = 2 ** 32
+    max_distance_fraction = 1 / 3
+    max_distance = max_distance_fraction * max_id
 
     def __init__(self):
         self.G = nx.Graph()
@@ -74,34 +77,9 @@ class ChannelNetwork(object):
     def ring_distance(self, node_a: int, node_b: int):
         return min((node_a - node_b) % self.max_id, (node_b - node_a) % self.max_id)
 
-    def get_closest_node_id(self, target_id, filter=None):
-        # Need to filter anyway, so O(n) min search is fine.
-        filtered_nodeids = (n for n in self.nodeids if not filter or filter(self.node_by_id[n]))
-        closest = min(filtered_nodeids, key=lambda n: self.ring_distance(n, target_id))
-
-        return closest
-
-    def get_closest_node_ids(self, target_id, filter=None):
-        "generator"
-        cid = self.get_closest_node_id(target_id, filter)
-        idx = self.nodeids.index(cid)
-
-        def get_next(idx, inc=1):
-            while True:
-                idx = (idx + inc) % len(self.nodeids)
-                nodeid = self.nodeids[idx]
-                if filter(self.node_by_id[nodeid]):
-                    return idx, nodeid
-
-        lidx, lid = get_next(idx, inc=-1)
-        ridx, rid = get_next(idx, inc=1)
-        while True:
-            if self.ring_distance(lid, target_id) < self.ring_distance(rid, target_id):
-                yield lid
-                lidx, lid = get_next(lidx, inc=-1)
-            else:
-                yield rid
-                ridx, rid = get_next(ridx, inc=1)
+    def get_closest_node_ids(self, target_id: int, filter: Callable[[Node], bool]=None):
+        filtered_nodeids = [n for n in self.nodeids if not filter or filter(self.node_by_id[n])]
+        return sorted(filtered_nodeids, key=lambda n: self.ring_distance(n, target_id))
 
     @staticmethod
     def _get_path_cost_function_constant_fees(value, hop_cost=1):
@@ -162,25 +140,6 @@ class ChannelNetwork(object):
             return path
         except nx.NetworkXNoPath:
             return None
-
-    def find_path_recursively(self, source: Node, target: Node, value, hop_limits=None):
-        contacted = set()
-        if not hop_limits:
-            hop_limits = [100]
-
-        path = None
-        for max_hops in hop_limits:  # breath first possible
-            print('Attempting to find path with a max of {} hops.'.format(max_hops))
-            c, path = source.find_path_recursively(target.uid, value, max_hops)
-            contacted |= c
-            if path:
-                break
-
-        if path:
-            assert len(path) == len(set(path))  # no node visited twice
-            return contacted, path + [target]
-
-        return contacted, []
 
     def find_path_with_helper(self, source: Node, target: Node, value):
         """
