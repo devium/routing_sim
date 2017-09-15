@@ -2,8 +2,6 @@ import math
 
 import networkx as nx
 from matplotlib import pyplot as plt
-from collections import defaultdict
-import numpy as np
 
 
 def calc_positions(nodes, max_id, min_deposit, max_deposit):
@@ -116,53 +114,3 @@ def draw2d(cn, path=None, highlighted_nodes=None, helper_highlight=None):
         )
 
     plt.show()
-
-
-def plot_channel_distribution(cn, ax):
-    num_channels = [len(node.channels) for node in cn.nodes]
-    max_ = max(num_channels)
-    ax.hist(num_channels, bins=range(max_ + 2), align='left', edgecolor='black')
-    ax.xaxis.set_ticks(np.arange(0, max_ + 1, 2))
-    ax.xaxis.set_ticks(np.arange(1, max_ + 1, 2), minor=True)
-    ax.grid(True)
-
-
-def plot_channel_capacities(cn, ax, max_, num_bins=50, log=False):
-    capacities = [cv.capacity for node in cn.nodes for cv in node.channels.values()]
-    ax.hist(
-        capacities,
-        bins=num_bins,
-        edgecolor='black',
-        range=[0, max_],
-        log=log
-    )
-    ax.grid(True)
-
-
-def plot_channel_balances(cn, ax, max_, num_bins=50, log=False):
-    balances = defaultdict(int)
-    for node in cn.nodes:
-        for cv in node.channels.values():
-            balances[frozenset([node.uid, cv.partner])] = abs(cv.balance)
-
-    balances = list(balances.values())
-    ax.hist(balances, bins=num_bins, range=[0, max_], log=log, edgecolor='black')
-    ax.grid(True)
-
-    # Return variance of balances.
-    return sum(balance * balance for balance in balances) / len(balances)
-
-
-def plot_channel_imbalances(cn, ax, max_, num_bins=50, log=False):
-    imbalances = defaultdict(int)
-    for node in cn.nodes:
-        for cv in node.channels.values():
-            imbalances[frozenset([node.uid, cv.partner])] = \
-                abs(cv.deposit - cv.partner_deposit + 2 * cv.balance)
-
-    imbalances = list(imbalances.values())
-    ax.hist(imbalances, bins=num_bins, range=[0, max_], edgecolor='black', log=log)
-    ax.grid(True)
-
-    # Return variance of imbalances.
-    return sum(imbalance * imbalance for imbalance in imbalances) / len(imbalances)

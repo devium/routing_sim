@@ -116,17 +116,17 @@ class ChannelNetwork(object):
         return cost_func_fast
 
     @staticmethod
-    def _get_path_cost_function_balance_fees(value):
+    def _get_path_cost_function_net_balance_fees(value):
         def cost_func_fees(a, b, _account):
             sign = 1 if a.uid < b.uid else -1
-            capacity = _account[a.uid] + sign * _account['balance']
+            # positive balance = larger uid owes smaller uid
+            balance_a = sign * _account['balance']
+            capacity = _account[a.uid] + balance_a
             if capacity < value:
                 return None
 
-            # Positive imbalance <=> a has a higher capacity than b.
-            balance = abs(_account['balance'])
             # Sigmoid function.
-            return 1 - 1 / (1 + math.exp(-balance))
+            return 1 - 1 / (1 + math.exp(-balance_a))
 
         return cost_func_fees
 
@@ -149,8 +149,8 @@ class ChannelNetwork(object):
     def find_path_global(self, source: Node, target: Node, value, path_cost_mode='constant'):
         if path_cost_mode == 'constant':
             path_cost_func = self._get_path_cost_function_constant_fees(value)
-        elif path_cost_mode == 'balance':
-            path_cost_func = self._get_path_cost_function_balance_fees(value)
+        elif path_cost_mode == 'net-balance':
+            path_cost_func = self._get_path_cost_function_net_balance_fees(value)
         elif path_cost_mode == 'imbalance':
             path_cost_func = self._get_path_cost_function_imbalance_fees(value)
         else:
