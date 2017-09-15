@@ -99,18 +99,51 @@ class Node(object):
         cv.balance = 0
         self.channels[other.uid] = cv
 
-    def find_path_bfs(self, target_id, value, max_paths=100):
+    @staticmethod
+    def _distance_priority(cn, source_id: int, current: 'Node', next_: 'Node', target_id: int):
         """
-        Modified BFS using a distance-to-target-based priority queue instead of a normal queue.
-        Queue elements are paths prioritized by their distance from the target.
+        Normalized distance between new node and target node.
+        distance == 0 => same node
+        distance == 1 => 180 degrees
         """
+        return cn.ring_distance(next_.uid, target_id) / cn.max_id * 2
+
+    @staticmethod
+    def _highway_priority(cn, source_id: int, current: 'Node', next_: 'Node', target_id: int):
+        # Normalized distance [0, 1]
+        distance = cn.ring_distance(next_.uid, target_id) / cn.max_id * 2
+
+        # "Highway factor" (0, 1)
+        # 0: decreasing fullness
+        # 1: increasing fullness
+        highway_factor = 1 / (1 + math.exp(-(next_.fullness - current.fullness)))
+
+        # Far away => use highway.
+        # Closer => follow shortest distance.
+        distance_weight = max(1 - distance * 4, 0)
+        priority = distance_weight * (1 - distance) + (1 - distance_weight) * highway_factor
+
+        return 1 - priority
+
+    def find_path_bfs(self, target_id, value, priority_model='distance', max_paths=100):
+        """
+        Modified BFS using a priority queue instead of a normal queue.
+        Lower priority value means higher actual priority.
+        """
+        priority_models = {
+            'distance': Node._distance_priority,
+            'highway': Node._highway_priority
+        }
+        priority_fun = priority_models[priority_model]
+
+        # Insertion order as a priority tie breaker.
         i = 0
-        queue = [(self.cn.ring_distance(self.uid, target_id), i, [self])]
+        queue = [(0, i, [self])]
         visited = {self}
         path_history = []
 
         while queue:
-            distance, order, path = heapq.heappop(queue)
+            _, _, path = heapq.heappop(queue)
             node = path[-1]
             visited.add(node)
             if len(path) > 1:
@@ -124,10 +157,12 @@ class Node(object):
                 partner = self.cn.node_by_id[cv.partner]
                 if partner not in visited and cv.capacity >= value:
                     new_path = path + [partner]
+                    priority = priority_fun(self.cn, self.uid, node, partner, target_id)
                     i += 1
-                    queue_entry = (self.cn.ring_distance(cv.partner, target_id), i, new_path)
+                    queue_entry = (priority, i, new_path)
                     heapq.heappush(queue, queue_entry)
 
+        # Node unreachable, likely due to fragmented network or degraded channels.
         return visited, [], path_history
 
 

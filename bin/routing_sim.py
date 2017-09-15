@@ -94,7 +94,7 @@ def simulate_pathfinding(config, num_paths=10, value=2):
         draw2d(cn, path, [path, [source, target]], filepath=os.path.join(OUT_DIR, filename))
 
         print('BFS path finding:')
-        _, path, path_history = source.find_path_bfs(target.uid, value)
+        _, path, path_history = source.find_path_bfs(target.uid, value, priority_model='highway')
         if path:
             print('Found path of length {}: {}'.format(len(path), path))
         else:
@@ -244,7 +244,7 @@ if __name__ == '__main__':
         min_deposit=4,
         max_deposit=100
     )
-    simulate_pathfinding(config, num_paths=1, value=5)
+    simulate_pathfinding(config, num_paths=5, value=5)
     # simulate_balancing(config, num_transfers=10000, transfer_value=1, fee_model='constant')
     # simulate_balancing(config, num_transfers=10000, transfer_value=1, fee_model='net-balance')
     # simulate_balancing(config, num_transfers=10000, transfer_value=1, fee_model='imbalance')
