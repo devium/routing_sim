@@ -114,7 +114,7 @@ class Node(object):
                 pass
         return contacted, []  # could not find path
 
-    def find_path_bfs(self, target_id, value):
+    def find_path_bfs(self, target_id, value, max_paths=100):
         """
         Modified BFS using a distance-to-target-based priority queue instead of a normal queue.
         Queue elements are paths prioritized by their distance from the target.
@@ -122,13 +122,18 @@ class Node(object):
         i = 0
         queue = [(self.cn.ring_distance(self.uid, target_id), i, [self])]
         visited = {self}
+        path_history = []
 
         while queue:
             distance, order, path = heapq.heappop(queue)
             node = path[-1]
             visited.add(node)
+            if len(path) > 1:
+                path_history.append(path)
             if node.uid == target_id:
-                return visited, path
+                return visited, path, path_history
+            if len(path_history) >= max_paths:
+                return visited, [], path_history
 
             for cv in node.channels.values():
                 partner = self.cn.node_by_id[cv.partner]
@@ -138,7 +143,7 @@ class Node(object):
                     queue_entry = (self.cn.ring_distance(cv.partner, target_id), i, new_path)
                     heapq.heappush(queue, queue_entry)
 
-        return visited, []
+        return visited, [], path_history
 
 
 class FullNode(Node):

@@ -1,7 +1,12 @@
 import math
+from typing import List
 
 import networkx as nx
 from matplotlib import pyplot as plt
+
+from raidensim.network.channel_network import ChannelNetwork
+from raidensim.network.node import Node
+from raidensim.network.path_finding_helper import PathFindingHelper
 
 
 def calc_positions(nodes, max_id, min_deposit, max_deposit):
@@ -75,7 +80,13 @@ def path_to_edges(cn, path):
     return edges
 
 
-def draw2d(cn, path=None, highlighted_nodes=None, helper_highlight=None):
+def draw2d(
+        cn: ChannelNetwork,
+        path: List[Node] = None,
+        highlighted_nodes: List[List[Node]] = None,
+        helper_highlight: PathFindingHelper=None,
+        filepath: str=None
+):
     from matplotlib.patches import Wedge
     from colorsys import hsv_to_rgb
     edge_color = '#eeeeee'
@@ -109,8 +120,14 @@ def draw2d(cn, path=None, highlighted_nodes=None, helper_highlight=None):
         nx.draw_networkx_edges(cn.G, pos, edgelist=path_to_edges(cn, path), edge_color='r')
 
     if highlighted_nodes:
-        nx.draw_networkx_nodes(
-            cn.G, pos, nodelist=highlighted_nodes, node_shape='x', node_size=12, node_color='b'
-        )
+        colors = ['r', 'b', 'c', 'g']
+        for i, highlighted_node_set in enumerate(highlighted_nodes):
+            color = colors[i % len(colors)]
+            nx.draw_networkx_nodes(
+                cn.G, pos, nodelist=highlighted_node_set, node_size=12, node_color=color
+            )
 
-    plt.show()
+    if filepath:
+        fig.savefig(filepath)
+    else:
+        plt.show()

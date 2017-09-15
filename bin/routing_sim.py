@@ -50,6 +50,7 @@ import os
 
 from raidensim.config import NetworkConfiguration
 from raidensim.dist import ParetoDistribution, BetaDistribution
+from raidensim.draw import draw2d
 from raidensim.network.channel_network import ChannelNetwork
 from raidensim.network.node import Node
 from raidensim.stat import get_channel_capacities, get_channel_net_balances, \
@@ -62,22 +63,6 @@ SCRIPT_DIR = os.path.dirname(__file__)
 OUT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, '../out'))
 
 
-def test_basic_channel():
-    cn = ChannelNetwork()
-    a = Node(cn, 1)
-    b = Node(cn, 2)
-    cn.G.add_edge(a, b)
-    channel_ab = a.channel_view(b)
-    channel_ba = b.channel_view(a)
-
-    channel_ab.deposit = 10
-    channel_ba.deposit = 20
-    channel_ab.balance = 2
-    assert channel_ba.balance == -2
-    assert channel_ab.capacity == 10 + 2
-    assert channel_ba.capacity == 20 - 2
-
-
 def setup_network(config):
     cn = ChannelNetwork()
     cn.generate_nodes(config)
@@ -86,17 +71,13 @@ def setup_network(config):
     return cn
 
 
-def test_basic_network(config):
-    cn = setup_network(config)
-    draw(cn)
-
-
-def test_global_pathfinding(config, num_paths=10, value=2):
+def simulate_pathfinding(config, num_paths=10, value=2):
     config.fullness_dist.reset()
     random.seed(0)
 
     cn = setup_network(config)
-    draw(cn)
+    filename = 'routing_{}.png'.format(config.num_nodes)
+    draw2d(cn, filepath=os.path.join(OUT_DIR, filename))
 
     for i in range(num_paths):
         print("-" * 40)
@@ -108,7 +89,8 @@ def test_global_pathfinding(config, num_paths=10, value=2):
             print('Found path of length {}: {}'.format(len(path), path))
         else:
             print('No path found.')
-        draw(cn, path)
+        filename = 'routing_{}_{}_global.png'.format(config.num_nodes, i)
+        draw2d(cn, path, [path, [source, target]], filepath=os.path.join(OUT_DIR, filename))
 
         # print('Recursive path finding:')
         # contacted, path = cn.find_path_recursively(source, target, value, [5, 10, 20, 50])
@@ -120,13 +102,21 @@ def test_global_pathfinding(config, num_paths=10, value=2):
         # draw(cn, path, contacted)
 
         print('BFS path finding:')
-        visited, path = source.find_path_bfs(target.uid, value)
+        _, path, path_history = source.find_path_bfs(target.uid, value)
         if path:
             print('Found path of length {}: {}'.format(len(path), path))
         else:
             print('No path found.')
+        visited = {source}
+        for j, subpath in enumerate(path_history):
+            visited |= set(subpath)
+            filename = 'routing_{}_{}_bfs_{}.png'.format(config.num_nodes, i, j)
+            draw2d(
+                cn, subpath, [visited, [source, target]], filepath=os.path.join(OUT_DIR, filename)
+            )
         print('Contacted {} nodes in the process: {}'.format(len(visited), visited))
-        draw(cn, path, visited)
+        filename = 'routing_{}_{}_bfs.png'.format(config.num_nodes, i)
+        draw2d(cn, path, [visited, [source, target]], filepath=os.path.join(OUT_DIR, filename))
 
         # print('Path finding with helpers.')
         # path, helper = cn.find_path_with_helper(source, target, value)
@@ -137,7 +127,7 @@ def test_global_pathfinding(config, num_paths=10, value=2):
         # draw(cn, path, None, helper)
 
 
-def test_balancing(
+def simulate_balancing(
         config: NetworkConfiguration, num_transfers: int, transfer_value: int, fee_model: str
 ):
     import matplotlib.pyplot as plt
@@ -214,9 +204,8 @@ def test_balancing(
     axs[1][3].axis('off')
 
     os.makedirs(OUT_DIR, exist_ok=True)
-    fig.savefig(
-        os.path.join(OUT_DIR, '{}_{}_{}.png'.format(config.num_nodes, num_transfers, fee_model))
-    )
+    filename = 'balancing_{}_{}_{}.png'.format(config.num_nodes, num_transfers, fee_model)
+    fig.savefig(os.path.join(OUT_DIR, filename))
 
 
 def simulate_transfers(cn: ChannelNetwork, num_transfers: int, value: int, fee_model: str) -> int:
@@ -252,36 +241,7 @@ def simulate_transfers(cn: ChannelNetwork, num_transfers: int, value: int, fee_m
     return failed
 
 
-def test_cost_func_fees():
-    cost_func = ChannelNetwork._get_path_cost_function_imbalance_fees(1)
-
-    class SimpleNode:
-        def __init__(self, uid):
-            self.uid = uid
-
-    cost = cost_func(SimpleNode(1), SimpleNode(2), {1: 10, 2: 12, 'balance': 1})  # 0-2
-    assert abs(cost - 0.881) < 0.01
-    cost = cost_func(SimpleNode(1), SimpleNode(2), {1: 10, 2: 12, 'balance': 3})  # 4-2
-    assert abs(cost - 0.119) < 0.01
-    cost = cost_func(SimpleNode(2), SimpleNode(1), {1: 10, 2: 12, 'balance': 3})  # -4-2
-    assert abs(cost - 0.998) < 0.01
-    cost = cost_func(SimpleNode(1), SimpleNode(2), {1: 10, 2: 12, 'balance': -5})  # -12-2
-    assert abs(cost - 0.999) < 0.01
-
-
-def draw(cn, path=None, highlighted_nodes=None, helper_highlight=None):
-    from raidensim.draw import draw2d as _draw
-    assert isinstance(cn, ChannelNetwork)
-    _draw(cn, path, highlighted_nodes, helper_highlight)
-
-
-##########################################################
-
-
 if __name__ == '__main__':
-    test_basic_channel()
-    test_cost_func_fees()
-    # test_basic_network()
     # fullness_dist = ParetoDistribution(5, 0, 1)
     fullness_dist = BetaDistribution(0.5, 2)
     config = NetworkConfiguration(
@@ -292,7 +252,7 @@ if __name__ == '__main__':
         min_deposit=4,
         max_deposit=100
     )
-    # test_global_pathfinding(config, num_paths=3, value=5)
-    test_balancing(config, num_transfers=10000, transfer_value=1, fee_model='constant')
-    test_balancing(config, num_transfers=10000, transfer_value=1, fee_model='net-balance')
-    test_balancing(config, num_transfers=10000, transfer_value=1, fee_model='imbalance')
+    simulate_pathfinding(config, num_paths=3, value=5)
+    # simulate_balancing(config, num_transfers=10000, transfer_value=1, fee_model='constant')
+    # simulate_balancing(config, num_transfers=10000, transfer_value=1, fee_model='net-balance')
+    # simulate_balancing(config, num_transfers=10000, transfer_value=1, fee_model='imbalance')
