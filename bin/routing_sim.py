@@ -41,12 +41,12 @@ Interactive:
 
 import random
 import sys
-
 import time
-
 import math
-
 import os
+
+import imageio
+import shutil
 
 from raidensim.config import NetworkConfiguration
 from raidensim.dist import ParetoDistribution, BetaDistribution
@@ -70,7 +70,7 @@ def setup_network(config):
     return cn
 
 
-def simulate_pathfinding(config, num_paths=10, value=2):
+def simulate_routing(config, num_paths=10, value=2):
     config.fullness_dist.reset()
     random.seed(0)
 
@@ -81,34 +81,49 @@ def simulate_pathfinding(config, num_paths=10, value=2):
     draw2d(cn, draw_labels=True, filepath=os.path.join(OUT_DIR, filename))
 
     for i in range(num_paths):
+        dirpath = os.path.join(OUT_DIR, 'routing_{}_{}'.format(config.num_nodes, i))
+        shutil.rmtree(dirpath, ignore_errors=True)
+        os.makedirs(dirpath, exist_ok=True)
+
         print("-" * 40)
         source, target = random.sample(cn.nodes, 2)
 
-        print('Global path finding:')
+        # Global routing (Dijkstra).
+        print('Global routing:')
         path = cn.find_path_global(source, target, value)
         if path:
             print('Found path of length {}: {}'.format(len(path), path))
         else:
             print('No path found.')
-        filename = 'routing_{}_{}_global.png'.format(config.num_nodes, i)
-        draw2d(cn, path, [path, [source, target]], filepath=os.path.join(OUT_DIR, filename))
+        filename = 'global.png'
+        draw2d(cn, path, [path, [source, target]], filepath=os.path.join(dirpath, filename))
 
-        print('BFS path finding:')
+        # Priority-BFS routing.
+        print('BFS routing:')
         _, path, path_history = source.find_path_bfs(target.uid, value, priority_model='highway')
         if path:
             print('Found path of length {}: {}'.format(len(path), path))
         else:
             print('No path found.')
         visited = {source}
+        gif_filenames = []
         for j, subpath in enumerate(path_history):
             visited |= set(subpath)
-            filename = 'routing_{}_{}_bfs_{}.png'.format(config.num_nodes, i, j)
+            filename = 'bfs_{}.png'.format(j)
+            gif_filenames.append(filename)
             draw2d(
-                cn, subpath, [visited, [source, target]], filepath=os.path.join(OUT_DIR, filename)
+                cn, subpath, [visited, [source, target]], filepath=os.path.join(dirpath, filename)
             )
         print('Contacted {} nodes in the process: {}'.format(len(visited), visited))
-        filename = 'routing_{}_{}_bfs.png'.format(config.num_nodes, i)
-        draw2d(cn, path, [visited, [source, target]], filepath=os.path.join(OUT_DIR, filename))
+        filename = 'bfs.png'
+        gif_filenames.append(filename)
+        draw2d(cn, path, [visited, [source, target]], filepath=os.path.join(dirpath, filename))
+
+        filename = 'bfs_animation.gif'
+        with imageio.get_writer(os.path.join(dirpath, filename), mode='I', fps=3) as writer:
+            for filename in gif_filenames:
+                image = imageio.imread(os.path.join(dirpath, filename))
+                writer.append_data(image)
 
         # print('Path finding with helpers.')
         # path, helper = cn.find_path_with_helper(source, target, value)
@@ -244,7 +259,7 @@ if __name__ == '__main__':
         min_deposit=4,
         max_deposit=100
     )
-    simulate_pathfinding(config, num_paths=5, value=5)
+    simulate_routing(config, num_paths=5, value=5)
     # simulate_balancing(config, num_transfers=10000, transfer_value=1, fee_model='constant')
     # simulate_balancing(config, num_transfers=10000, transfer_value=1, fee_model='net-balance')
     # simulate_balancing(config, num_transfers=10000, transfer_value=1, fee_model='imbalance')
