@@ -5,6 +5,7 @@ from typing import Callable
 import networkx as nx
 import time
 
+from raidensim.config import NetworkConfiguration
 from raidensim.dijkstra_weighted import dijkstra_path
 from raidensim.network.node import FullNode
 from raidensim.network.node import Node
@@ -23,14 +24,24 @@ class ChannelNetwork(object):
         self.nodes = []
         self.helpers = []
 
-    def generate_nodes(self, config):
+    def generate_nodes(self, config: NetworkConfiguration):
         # full nodes
         for i in range(config.num_nodes):
             uid = random.randrange(self.max_id)
             fullness = config.fullness_dist.random()
-            num_channels = config.get_num_channels(fullness)
+            max_initiated_channels = config.get_max_initiated_channels(fullness)
+            max_accepted_channels = config.get_max_accepted_channels(fullness)
+            max_channels = config.get_max_channels(fullness)
             deposit_per_channel = config.get_channel_deposit(fullness)
-            node = FullNode(self, uid, fullness, num_channels, deposit_per_channel)
+            node = FullNode(
+                self,
+                uid,
+                fullness,
+                max_initiated_channels,
+                max_accepted_channels,
+                max_channels,
+                deposit_per_channel
+            )
             self.node_by_id[uid] = node
 
         self.nodeids = sorted(self.node_by_id.keys())
@@ -44,7 +55,7 @@ class ChannelNetwork(object):
             range_ = random.randrange(min_range, max_range)
             self.helpers.append(PathFindingHelper(self, range_, center))
 
-    def connect_nodes(self):
+    def connect_nodes(self, open_strategy='closest_fuller'):
         print('Connecting nodes.')
         tic = time.time()
         for i, node in enumerate(self.nodes):
@@ -52,7 +63,7 @@ class ChannelNetwork(object):
             if toc - tic > 5:
                 tic = toc
                 print('Connecting node {}/{}'.format(i, len(self.nodes)))
-            node.initiate_channels()
+            node.initiate_channels(open_strategy)
 
         del_nodes = []
         for node in self.nodes:

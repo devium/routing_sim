@@ -9,14 +9,14 @@ from raidensim.network.node import Node
 from raidensim.network.path_finding_helper import PathFindingHelper
 
 
-def calc_positions(nodes, max_id, min_deposit, max_deposit):
+def calc_positions(nodes, max_id, min_fullness, max_fullness):
     """helper to position nodes on a 2d plane as a circle"""
     positions = dict()
-    _range = float(max_deposit - min_deposit)
+    _range = float(max_fullness - min_fullness)
 
     def scale(node):
         # high deposits to the center
-        factor = (node.deposit_per_channel - min_deposit) / _range  # 1 for max deposit
+        factor = (node.fullness - min_fullness) / _range  # 1 for max deposit
         return 2 / (factor + 1)
 
     for node in nodes:
@@ -92,9 +92,9 @@ def draw2d(
     from colorsys import hsv_to_rgb
     edge_color = '#eeeeee'
 
-    max_deposit = max(n.deposit_per_channel for n in cn.nodes)
-    min_deposit = min(n.deposit_per_channel for n in cn.nodes)
-    pos = calc_positions(cn.nodes, cn.max_id, min_deposit, max_deposit)
+    max_fullness = max(n.fullness for n in cn.nodes)
+    min_fullness = min(n.fullness for n in cn.nodes)
+    pos = calc_positions(cn.nodes, cn.max_id, min_fullness, max_fullness)
 
     plt.clf()
     fig = plt.gcf()

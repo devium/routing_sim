@@ -5,21 +5,22 @@ from collections import namedtuple
 
 import os
 
-from raidensim.config import NetworkConfiguration
+from raidensim.config import NetworkConfiguration, MicroRaidenNetworkConfiguration
 from raidensim.curve_editor import CurveEditor
 from raidensim.dist import BetaDistribution, CircleDistribution
 from raidensim.network.channel_network import ChannelNetwork
 from raidensim.draw import calc3d_positions
 
 # Network topology parameters.
-NUM_NODES = 1000
+NUM_NODES = 500
 MIN_CHANNELS = 2
 MAX_CHANNELS = 10
 TOP_HOLE_RADIUS = 0.2
 CHANNELS_POPUP = False
+MODE = 'micro'
 
 # Animation settings. Base unit = seconds.
-ANIMATION_LENGTH = 10.0
+ANIMATION_LENGTH = 5.0
 TRANSFER_HOP_DELAY = 0.08
 SIMULATION_STEP_SIZE = 0.01
 
@@ -30,8 +31,8 @@ TRANSFER_FREQ_MAX = 200.0
 # http://homepage.divms.uiowa.edu/~mbognar/applets/beta.html
 FULLNESS_BETA_A = 1.1
 FULLNESS_BETA_B = 5
-DISTRIBUTION = BetaDistribution(FULLNESS_BETA_A, FULLNESS_BETA_B)
-# DISTRIBUTION = CircleDistribution()
+# DISTRIBUTION = BetaDistribution(FULLNESS_BETA_A, FULLNESS_BETA_B)
+DISTRIBUTION = CircleDistribution()
 
 TRANSFER_ATTEMPTS_MAX = 10
 TRANSFER_VALUE = 1
@@ -112,17 +113,36 @@ class AnimationGenerator(object):
         # Export final network configuration.
         random.seed(0)
         fullness_dist = DISTRIBUTION
-        config = NetworkConfiguration(
-            num_nodes=NUM_NODES,
-            fullness_dist=fullness_dist,
-            min_channels=MIN_CHANNELS,
-            max_channels=MAX_CHANNELS,
-            min_deposit=10,
-            max_deposit=200
-        )
+
+        if MODE == 'micro':
+            config = MicroRaidenNetworkConfiguration(
+                num_nodes=NUM_NODES,
+                client_fraction=0.95,
+                server_fullness_dist=fullness_dist,
+                min_max_initiated_channels=1,
+                max_max_initiated_channels=3,
+                min_max_accepted_channels=100,
+                max_max_accepted_channels=100,
+                min_deposit=100,
+                max_deposit=100
+            )
+        else:
+            config = NetworkConfiguration(
+                num_nodes=NUM_NODES,
+                fullness_dist=fullness_dist,
+                min_max_initiated_channels=MIN_CHANNELS,
+                max_max_initiated_channels=MAX_CHANNELS,
+                min_max_accepted_channels=100,
+                max_max_accepted_channels=100,
+                min_max_channels=100 + MIN_CHANNELS,
+                max_max_channels=100 + MAX_CHANNELS,
+                min_deposit=10,
+                max_deposit=200
+            )
+
         self.cn = ChannelNetwork()
         self.cn.generate_nodes(config)
-        self.cn.connect_nodes()
+        self.cn.connect_nodes(config.open_strategy)
 
         nodes, self.channel_topology = calc3d_positions(
             self.cn, TOP_HOLE_RADIUS, dist_pdf=fullness_dist.get_pdf()
@@ -259,28 +279,35 @@ class AnimationGenerator(object):
 
     def create_transfer(self):
         for i in range(TRANSFER_ATTEMPTS_MAX):
-            source, target = random.sample(self.visible_nodes, 2)
-            path = self.cn.find_path_global(
-                self.cn.nodes[source],
-                self.cn.nodes[target],
-                TRANSFER_VALUE
-            )
-            if path:
-                # Find channel for each hop.
-                path_channels = []
-                node_b_idx = self.node_to_index[path[0]]
-                for j in range(len(path) - 1):
-                    node_a_idx = node_b_idx
-                    node_b_idx = self.node_to_index[path[j + 1]]
-                    hop = {node_a_idx, node_b_idx}
-                    hop_channels = [i for i in range(len(self.channel_topology)) if
-                                    set(self.channel_topology[i]) == hop]
-                    assert len(hop_channels) == 1
-                    path_channels.append(hop_channels[0])
+            if MODE == 'micro':
+                channel = random.sample(self.visible_channels, 1)
+                if channel:
+                    self.flash_route(channel)
+                    self.transfer_id += 1
+                    break
+            else:
+                source, target = random.sample(self.visible_nodes, 2)
+                path = self.cn.find_path_global(
+                    self.cn.nodes[source],
+                    self.cn.nodes[target],
+                    TRANSFER_VALUE
+                )
+                if path:
+                    # Find channel for each hop.
+                    path_channels = []
+                    node_b_idx = self.node_to_index[path[0]]
+                    for j in range(len(path) - 1):
+                        node_a_idx = node_b_idx
+                        node_b_idx = self.node_to_index[path[j + 1]]
+                        hop = {node_a_idx, node_b_idx}
+                        hop_channels = [i for i in range(len(self.channel_topology)) if
+                                        set(self.channel_topology[i]) == hop]
+                        assert len(hop_channels) == 1
+                        path_channels.append(hop_channels[0])
 
-                self.flash_route(path_channels)
-                self.transfer_id += 1
-                break
+                    self.flash_route(path_channels)
+                    self.transfer_id += 1
+                    break
 
     def flash_nodes(self, nodes, time_offset=0):
         """

@@ -48,7 +48,7 @@ import os
 import imageio
 import shutil
 
-from raidensim.config import NetworkConfiguration
+from raidensim.config import NetworkConfiguration, MicroRaidenNetworkConfiguration
 from raidensim.dist import ParetoDistribution, BetaDistribution
 from raidensim.draw import draw2d
 from raidensim.network.channel_network import ChannelNetwork
@@ -66,7 +66,7 @@ def setup_network(config):
     cn = ChannelNetwork()
     cn.generate_nodes(config)
     # cn.generate_helpers(config)
-    cn.connect_nodes()
+    cn.connect_nodes(config.open_strategy)
     return cn
 
 
@@ -100,7 +100,7 @@ def simulate_routing(config, num_paths=10, value=2):
 
         # Priority-BFS routing.
         print('BFS routing:')
-        _, path, path_history = source.find_path_bfs(target.uid, value, priority_model='highway')
+        _, path, path_history = source.find_path_bfs(target.uid, value, priority_model='distance')
         if path:
             print('Found path of length {}: {}'.format(len(path), path))
         else:
@@ -251,15 +251,31 @@ def simulate_transfers(cn: ChannelNetwork, num_transfers: int, value: int, fee_m
 if __name__ == '__main__':
     # fullness_dist = ParetoDistribution(5, 0, 1)
     fullness_dist = BetaDistribution(0.5, 2)
-    config = NetworkConfiguration(
-        num_nodes=500,
-        fullness_dist=fullness_dist,
-        min_channels=2,
-        max_channels=10,
-        min_deposit=4,
+    # config = NetworkConfiguration(
+    #     num_nodes=1000,
+    #     fullness_dist=fullness_dist,
+    #     min_max_initiated_channels=2,
+    #     max_max_initiated_channels=10,
+    #     min_max_accepted_channels=100,
+    #     max_max_accepted_channels=100,
+    #     min_max_channels=102,
+    #     max_max_channels=110,
+    #     min_deposit=4,
+    #     max_deposit=100,
+    #     open_strategy='closest_fuller'
+    # )
+    config = MicroRaidenNetworkConfiguration(
+        num_nodes=200,
+        client_fraction=0.95,
+        server_fullness_dist=fullness_dist,
+        min_max_initiated_channels=1,
+        max_max_initiated_channels=3,
+        min_max_accepted_channels=100,
+        max_max_accepted_channels=100,
+        min_deposit=100,
         max_deposit=100
     )
-    simulate_routing(config, num_paths=5, value=5)
+    simulate_routing(config, num_paths=0, value=5)
     # simulate_balancing(config, num_transfers=10000, transfer_value=1, fee_model='constant')
     # simulate_balancing(config, num_transfers=10000, transfer_value=1, fee_model='net-balance')
     # simulate_balancing(config, num_transfers=10000, transfer_value=1, fee_model='imbalance')
