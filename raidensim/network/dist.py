@@ -3,7 +3,15 @@ import numpy as np
 from scipy.stats import semicircular, beta
 
 
-class ParetoDistribution(object):
+class Distribution(object):
+    def reset(self):
+        raise NotImplementedError
+
+    def random(self):
+        raise NotImplementedError
+
+
+class ParetoDistribution(Distribution):
     def __init__(self, a, min_value, max_value):
         """
         Pareto distribution according to
@@ -12,7 +20,8 @@ class ParetoDistribution(object):
 
         A higher `a` causes a sharper drop-off in distribution (~= poorer network).
 
-        This implementation is artificially bounded by max_value.
+        This implementation is artificially bounded by max_value, potentially leading to peaks
+        at max_value.
         """
         self.a = a
         self.min_value = min_value
@@ -26,7 +35,7 @@ class ParetoDistribution(object):
         return min(np.random.pareto(self.a) + self.min_value, self.max_value)
 
 
-class CircleDistribution(object):
+class CircleDistribution(Distribution):
     def __init__(self, min_value=0, max_value=1):
         """
         Quarter-circle distribution. Can also be used as the height of a point on the surface of a
@@ -46,10 +55,10 @@ class CircleDistribution(object):
         return lambda x: 2 * semicircular.pdf(x)
 
 
-class BetaDistribution(object):
+class BetaDistribution(Distribution):
     def __init__(self, a, b, min_value=0, max_value=1):
         """
-        Beta distribution. You can do pretty much anything with this. Produces values in [0,1]
+        Beta distribution. You can do pretty much anything with this. Produces values in [0,1].
         """
         self.a = a
         self.b = b

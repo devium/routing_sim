@@ -229,9 +229,7 @@ class Animator:
         num_updates = 0
         for element_type, id_to_mat_update in type_to_id_to_mat_update.items():
             for element_id, (
-                    active_progress,
-                    hidden_progress,
-                    transfer_id
+                    active_progress, hidden_progress, transfer_id
             ) in id_to_mat_update.items():
                 # Get references to element's material shader mixers.
                 name = '{}.{:06d}'.format(
@@ -240,7 +238,7 @@ class Animator:
                 obj = bpy.data.objects['Object.Network.' + name]
                 current_active_progress, current_hidden_progress = from_pass_index(obj.pass_index)
 
-                hidden = False
+                hide = False
                 if active_progress == -1:
                     active_progress = current_active_progress
                 if not type_to_visible[element_type]:
@@ -248,7 +246,7 @@ class Animator:
                         type_to_active_curve[element_type], active_progress
                     )
                     if active_mix < 0.05:
-                        hidden = True
+                        hide = True
 
                 if hidden_progress == -1:
                     hidden_progress = current_hidden_progress
@@ -256,14 +254,10 @@ class Animator:
                     type_to_hidden_curve[element_type], hidden_progress
                 )
                 if hidden_mix > 0.95:
-                    hidden = True
+                    hide = True
 
-                if hidden:
-                    obj.hide = True
-                    obj.hide_render = True
-                else:
-                    obj.hide = False
-                    obj.hide_render = False
+                obj.hide = hide
+                obj.hide_render = hide
 
                 obj.pass_index = to_pass_index(active_progress, hidden_progress)
 

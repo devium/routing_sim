@@ -3,10 +3,18 @@ import numpy as np
 import sys
 from scipy import interpolate
 
-POINT_CLICK_RADIUS = 0.05
-
 
 class CurveEditor(object):
+    """
+    Opens up a pyplot-based 1D curve editor that interpolates specified points with cubic splines.
+    Usage:
+    * Click anywhere to add new points to the curve.
+    * Click near an existing point to remove that point.
+    * Click above/below an existing point to move that point.
+    * Click outside the specified x/y ranges to add and snap points to min/max.
+    """
+    POINT_CLICK_RADIUS = 0.05
+
     def __init__(self, points=None, title='', xmin=0, xmax=1, ymin=0, ymax=1):
         assert not points or isinstance(points, list)
         self.points = points if points else []
@@ -77,11 +85,11 @@ class CurveEditor(object):
         for x, y in self.points:
             dx = cx - x
             dy = cy - y
-            if dx * dx + dy * dy < POINT_CLICK_RADIUS * POINT_CLICK_RADIUS:
+            if dx * dx + dy * dy < self.POINT_CLICK_RADIUS * self.POINT_CLICK_RADIUS:
                 remove_point = [x, y]
                 create_new = False
                 break
-            if abs(dx) < POINT_CLICK_RADIUS:
+            if abs(dx) < self.POINT_CLICK_RADIUS:
                 remove_point = [x, y]
                 break
 

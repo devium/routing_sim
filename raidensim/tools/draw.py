@@ -2,6 +2,7 @@ import math
 from typing import List
 
 import networkx as nx
+import os
 from matplotlib import pyplot as plt
 
 from raidensim.network.channel_network import ChannelNetwork
@@ -32,10 +33,8 @@ def calc3d_positions(cn, hole_radius, dist_pdf):
     Helper to position nodes in 3d.
     Nodes are again distributed on rings, their address determining the position on that ring.
     The fuller nodes are (more channels, higher deposits) the higher these nodes are positioned.
-    The radius function determines the radius of the 3D shape at a certain height/fullness. The
-    default is a semisphere-like radius calculation.
-    Preferably, the radius calculation should match the fullness distribution to achieve an even
-    distribution of nodes on the surface of the resulting shape.
+    The dist_pdf is expected to be the fullness probability-density function so that nodes are
+    evenly distributed on a surface that corresponds to their fullness distribution.
     """
     positions = []
     max_fullness = max(n.fullness for n in cn.nodes)
@@ -45,7 +44,7 @@ def calc3d_positions(cn, hole_radius, dist_pdf):
 
     for node in cn.nodes:
         # Put x,y on circle of radius 1.
-        rad = 2 * math.pi * node.uid / float(cn.max_id)
+        rad = 2 * math.pi * node.uid / float(cn.MAX_ID)
         x, y = math.sin(rad), math.cos(rad)
 
         # Height above ground (light client =~0, full node up to 1).
@@ -59,16 +58,11 @@ def calc3d_positions(cn, hole_radius, dist_pdf):
         y *= r
         positions.append([x, y, h])
 
-    edges = set()
-    for a_idx, node in enumerate(cn.nodes):
-        for c in node.channels.values():
-            b_idx = cn.nodeids.index(c.partner)
-            edges.add(frozenset({a_idx, b_idx}))
-    assert len(edges) == sum((len(node.channels) for node in cn.nodes)) / 2
-    return positions, list(edges)
+    bi_edges = {frozenset({a, b}) for a, b in cn.edges}
+    return positions, list(bi_edges)
 
 
-def path_to_edges(cn, path):
+def path_to_edges(path):
     edges = []
     assert len(path) > 1
     for i in range(len(path) - 1):
@@ -94,7 +88,7 @@ def draw2d(
 
     max_fullness = max(n.fullness for n in cn.nodes)
     min_fullness = min(n.fullness for n in cn.nodes)
-    pos = calc_positions(cn.nodes, cn.max_id, min_fullness, max_fullness)
+    pos = calc_positions(cn.nodes, cn.MAX_ID, min_fullness, max_fullness)
 
     plt.clf()
     fig = plt.gcf()
@@ -104,8 +98,8 @@ def draw2d(
 
     for helper in cn.helpers:
         # Angles start at (1,0) ccw, node IDs at (0,1) cw.
-        sangle = 90 - (helper.center + helper.range / 2) / float(cn.max_id) * 360
-        eangle = 90 - (helper.center - helper.range / 2) / float(cn.max_id) * 360
+        sangle = 90 - (helper.center + helper.range / 2) / float(cn.MAX_ID) * 360
+        eangle = 90 - (helper.center - helper.range / 2) / float(cn.MAX_ID) * 360
 
         # Magic numbers to make colors and radius distinct but deterministic.
         color = hsv_to_rgb(helper.center / 100.0 % 1, 0.9, 0.5)
@@ -116,23 +110,24 @@ def draw2d(
         alpha = 0.6 if helper == helper_highlight else 0.2
         ax.add_artist(Wedge((0, 0), radius, sangle, eangle, color=color, alpha=alpha))
 
-    nx.draw_networkx(cn.G, pos, edge_color=edge_color, node_size=1, with_labels=False, ax=ax)
+    nx.draw_networkx(cn, pos, edge_color=edge_color, node_size=1, with_labels=False, ax=ax)
     if path:
-        nx.draw_networkx_edges(cn.G, pos, edgelist=path_to_edges(cn, path), edge_color='r')
+        nx.draw_networkx_edges(cn, pos, edgelist=path_to_edges(path), edge_color='r')
 
     if draw_labels:
         labels = {node: node.uid for node in cn.nodes}
-        nx.draw_networkx_labels(cn.G, pos, labels, font_size=6)
+        nx.draw_networkx_labels(cn, pos, labels, font_size=6)
 
     if highlighted_nodes:
         colors = ['r', 'b', 'c', 'g']
         for i, highlighted_node_set in enumerate(highlighted_nodes):
             color = colors[i % len(colors)]
             nx.draw_networkx_nodes(
-                cn.G, pos, nodelist=highlighted_node_set, node_size=12, node_color=color
+                cn, pos, nodelist=highlighted_node_set, node_size=12, node_color=color
             )
 
     if filepath:
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
         fig.savefig(filepath)
     else:
         plt.show()

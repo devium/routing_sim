@@ -1,61 +1,54 @@
 import math
 import random
-from typing import Callable
+from typing import Callable, List, Union
 
 import networkx as nx
 import time
 
-from raidensim.config import NetworkConfiguration
-from raidensim.dijkstra_weighted import dijkstra_path
-from raidensim.network.node import FullNode
+from .config import NetworkConfiguration
 from raidensim.network.node import Node
 from raidensim.network.path_finding_helper import PathFindingHelper
 
 
-class ChannelNetwork(object):
-    max_id = 2 ** 32
-    max_distance_fraction = 1 / 3
-    max_distance = max_distance_fraction * max_id
+class ChannelNetwork(nx.DiGraph):
+    MAX_ID = 2 ** 32
+    MAX_DISTANCE_FRACTION = 1 / 3
+    MAX_DISTANCE = MAX_DISTANCE_FRACTION * MAX_ID
 
-    def __init__(self):
-        self.G = nx.Graph()
+    def __init__(self, config: NetworkConfiguration):
+        nx.DiGraph.__init__(self)
+        self.config = config
         self.node_by_id = dict()
-        self.nodeids = []
-        self.nodes = []
         self.helpers = []
 
+        self.generate_nodes(config)
+        # cn.generate_helpers(config)
+        self.connect_nodes(config.open_strategy)
+
     def generate_nodes(self, config: NetworkConfiguration):
-        # full nodes
         for i in range(config.num_nodes):
-            uid = random.randrange(self.max_id)
+            uid = random.randrange(self.MAX_ID)
             fullness = config.fullness_dist.random()
-            max_initiated_channels = config.get_max_initiated_channels(fullness)
-            max_accepted_channels = config.get_max_accepted_channels(fullness)
-            max_channels = config.get_max_channels(fullness)
-            deposit_per_channel = config.get_channel_deposit(fullness)
-            node = FullNode(
+            node = Node(
                 self,
                 uid,
                 fullness,
-                max_initiated_channels,
-                max_accepted_channels,
-                max_channels,
-                deposit_per_channel
+                config.get_max_initiated_channels(fullness),
+                config.get_max_accepted_channels(fullness),
+                config.get_max_channels(fullness),
+                config.get_channel_deposit(fullness)
             )
-            self.node_by_id[uid] = node
+            self.add_node(node)
 
-        self.nodeids = sorted(self.node_by_id.keys())
-        self.nodes = [self.node_by_id[_uid] for _uid in self.nodeids]
-
-    def generate_helpers(self, config):
+    def generate_helpers(self, config: NetworkConfiguration):
         for i in range(config.ph_num_helpers):
-            center = random.randrange(self.max_id)
-            min_range = int(config.ph_min_range_fr * self.max_id)
-            max_range = int(config.ph_max_range_fr * self.max_id)
+            center = random.randrange(self.MAX_ID)
+            min_range = int(config.ph_min_range_fr * self.MAX_ID)
+            max_range = int(config.ph_max_range_fr * self.MAX_ID)
             range_ = random.randrange(min_range, max_range)
             self.helpers.append(PathFindingHelper(self, range_, center))
 
-    def connect_nodes(self, open_strategy='closest_fuller'):
+    def connect_nodes(self, open_strategy='bi_closest_fuller'):
         print('Connecting nodes.')
         tic = time.time()
         for i, node in enumerate(self.nodes):
@@ -67,102 +60,66 @@ class ChannelNetwork(object):
 
         del_nodes = []
         for node in self.nodes:
-            if not node.channels:
-                print("not connected", node)
+            if not node.partners:
+                print("Not connected: {}. Removing.".format(node))
                 del_nodes.append(node)
-                self.nodeids.remove(node.uid)
-                del self.node_by_id[node.uid]
-            elif len(node.channels) < 2:
-                print("weakly connected", node)
+            elif len(node.partners) < 2:
+                print("Weakly connected: {}".format(node))
 
-        self.nodes = [node for node in self.nodes if node not in del_nodes]
+        self.remove_nodes_from(del_nodes)
 
-    def add_edge(self, A, B):
-        assert isinstance(A, Node)
-        assert isinstance(B, Node)
-        if A.uid < B.uid:
-            self.G.add_edge(A, B)
+    def ring_distance(self, a: Union[int, Node], b: Union[int, Node]):
+        if isinstance(a, int):
+            return min((a - b) % self.MAX_ID, (b - a) % self.MAX_ID)
+        elif isinstance(a, Node):
+            return self.ring_distance(a.uid, b.uid)
         else:
-            self.G.add_edge(B, A)
+            raise TypeError('Unsupported type.')
 
-    def ring_distance(self, node_a: int, node_b: int):
-        return min((node_a - node_b) % self.max_id, (node_b - node_a) % self.max_id)
+    def get_closest_nodes(self, target_id: int, filter_: Callable[[Node], bool]=None):
+        filtered_nodes = [n for n in self.nodes if not filter_ or filter_(n)]
+        return sorted(filtered_nodes, key=lambda n: self.ring_distance(n.uid, target_id))
 
-    def get_closest_node_ids(self, target_id: int, filter: Callable[[Node], bool]=None):
-        filtered_nodeids = [n for n in self.nodeids if not filter or filter(self.node_by_id[n])]
-        return sorted(filtered_nodeids, key=lambda n: self.ring_distance(n, target_id))
-
-    @staticmethod
-    def _get_path_cost_function_constant_fees(value, hop_cost=1):
-        def cost_func_fast(a, b, _account):
-            sign = 1 if a.uid < b.uid else -1
-            capacity = _account[a.uid] + sign * _account['balance']
-            assert capacity >= 0
-            if capacity < value:
-                return None
-            return hop_cost
-
-        return cost_func_fast
-
-    @staticmethod
-    def _get_path_cost_function_net_balance_fees(value):
-        def cost_func_fees(a, b, _account):
-            sign = 1 if a.uid < b.uid else -1
-            # positive balance = larger uid owes smaller uid
-            balance_a = sign * _account['balance']
-            capacity = _account[a.uid] + balance_a
-            if capacity < value:
-                return None
-
-            # Sigmoid function.
-            return 1 - 1 / (1 + math.exp(-balance_a))
-
-        return cost_func_fees
-
-    @staticmethod
-    def _get_path_cost_function_imbalance_fees(value):
-        def cost_func_fees(a, b, _account):
-            sign = 1 if a.uid < b.uid else -1
-            capacity = _account[a.uid] + sign * _account['balance']
-            if capacity < value:
-                return None
-
-            # Positive imbalance <=> a has a higher capacity than b.
-            imbalance = _account[a.uid] - _account[b.uid] + sign * 2 * _account['balance']
-            imbalance -= 2 * value
-            # Sigmoid function.
-            return 1 - 1 / (1 + math.exp(-imbalance))
-
-        return cost_func_fees
-
-    def find_path_global(self, source: Node, target: Node, value, path_cost_mode='constant'):
-        if path_cost_mode == 'constant':
-            path_cost_func = self._get_path_cost_function_constant_fees(value)
-        elif path_cost_mode == 'net-balance':
-            path_cost_func = self._get_path_cost_function_net_balance_fees(value)
-        elif path_cost_mode == 'imbalance':
-            path_cost_func = self._get_path_cost_function_imbalance_fees(value)
-        else:
-            raise ValueError('Unsupported fee model.')
+    def find_path_global(self, source: Node, target: Node, value: int, edge_cost_mode='constant'):
+        self._update_edge_costs(edge_cost_mode, value)
         try:
-            path = dijkstra_path(
-                self.G, source, target, path_cost_func
-            )
-            return path
+            return nx.dijkstra_path(self, source, target)
         except nx.NetworkXNoPath:
             return None
+
+    def _get_edge_cost_constant(self, a: Node, b: Node):
+        return 1
+
+    def _get_edge_cost_net_balance(self, a: Node, b: Node):
+        # Sigmoid function.
+        return 1 - 1 / (1 + math.exp(-a.get_net_balance(b)))
+
+    def _get_edge_cost_imbalance(self, a: Node, b: Node):
+        # Sigmoid function.
+        return 1 - 1 / (1 + math.exp(-a.get_imbalance(b)))
+
+    EDGE_COST_MODES = {
+        'constant': _get_edge_cost_constant,
+        'net-balance': _get_edge_cost_net_balance,
+        'imbalance': _get_edge_cost_imbalance,
+    }
+
+    def _update_edge_costs(self, edge_cost_mode: str, value: int):
+        for a, b in self.edges:
+            if a.get_capacity(b) < value:
+                self.edges[a,b]['weight'] = None
+            else:
+                self.edges[a,b]['weight'] = self.EDGE_COST_MODES[edge_cost_mode](self, a, b)
 
     def find_path_with_helper(self, source: Node, target: Node, value):
         """
         Find a path to the target using pathfinding helpers that know about channel balances in
         the target address sector.
         """
-        assert isinstance(source, Node)
-        assert isinstance(target, Node)
-
         helpers = (helper for helper in self.helpers if helper.is_in_range(target))
 
-        # Assume direct entrypoint into target sector.
+        # FIXME: inter-sector routing
+        # Assume direct entry point into target sector.
         for helper in helpers:
             print('Trying to route through helper {} +/- {} to {}.'.format(
                 helper.center, int(helper.range / 2), target.uid
@@ -173,9 +130,10 @@ class ChannelNetwork(object):
 
         return None, None
 
-    def do_transfer(self, path, value):
+    def do_transfer(self, path: List[Node], value: int):
         for i in range(len(path) - 1):
-            node_a = path[i]
-            node_b = path[i + 1]
-            cv1 = node_a.channels[node_b.uid]
-            cv1.balance -= value
+            a = path[i]
+            b = path[i + 1]
+            if a.get_capacity(b) < value:
+                print('Warning: Transfer ({} -> {}: {}) exceeds capacity.'.format(a, b, value))
+            self.edges[a, b]['balance'] += value

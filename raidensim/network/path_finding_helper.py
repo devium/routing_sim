@@ -1,6 +1,5 @@
 import networkx as nx
 
-from raidensim.dijkstra_weighted import dijkstra_path
 from raidensim.network.node import Node
 
 
@@ -17,10 +16,9 @@ class PathFindingHelper(object):
 
     def _get_path_cost_function(self, value, hop_cost=1):
         """
-        Same as the global :func:`~ChannelNetwork._get_path_cost_function` except it considers
-        nodes outside the helper's range unavailable.
+        Same as global path finding except it considers nodes outside the helper's range
+        unavailable.
         """
-
         def cost_func_fast(a, b, _account):
             if not self.is_in_range(a) and not self.is_in_range(b):
                 return None
@@ -38,10 +36,12 @@ class PathFindingHelper(object):
         return cost_func_fast
 
     def find_path(self, source, target, value):
-        assert isinstance(source, Node)
-        assert isinstance(target, Node)
-        try:
-            path = dijkstra_path(self.cn.G, source, target, self._get_path_cost_function(value))
-            return path
-        except nx.NetworkXNoPath:
-            return None
+        # FIXME
+        return None
+        # assert isinstance(source, Node)
+        # assert isinstance(target, Node)
+        # try:
+        #     path = dijkstra_path(self.cn.G, source, target, self._get_path_cost_function(value))
+        #     return path
+        # except nx.NetworkXNoPath:
+        #     return None
