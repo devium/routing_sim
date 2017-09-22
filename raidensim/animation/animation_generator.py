@@ -3,9 +3,11 @@ import os
 import random
 import time
 from collections import namedtuple
-from typing import List, Set
+from typing import List
 
-from raidensim.network import ChannelNetwork, Node
+from raidensim.network.channel_network import ChannelNetwork
+from raidensim.network.node import Node
+from raidensim.strategy.network_strategies import MicroRaidenNetworkStrategy
 from raidensim.tools import CurveEditor, calc3d_positions
 from .config import AnimationConfiguration
 
@@ -216,7 +218,7 @@ class AnimationGenerator(object):
 
     def create_transfer(self):
         for i in range(self.config.transfer_attempts_max):
-            if self.config.network.open_strategy == 'microraiden':
+            if isinstance(self.config.network.network_strategy, MicroRaidenNetworkStrategy):
                 channel = random.sample(self.visible_channels, 1)
                 if channel:
                     self.flash_route(list(channel[0]))

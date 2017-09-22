@@ -1,3 +1,5 @@
+import random
+
 import numpy as np
 
 from scipy.stats import semicircular, beta
@@ -9,6 +11,46 @@ class Distribution(object):
 
     def random(self):
         raise NotImplementedError
+
+    def get_pdf(self):
+        raise NotImplementedError
+
+
+class ConstantDistribution(Distribution):
+    def __init__(self, value):
+        self.value = value
+
+    def reset(self):
+        pass
+
+    def random(self):
+        # Huehuehueh
+        return self.value
+
+    def get_pdf(self):
+        return lambda x: 1 if x == self.value else 0
+
+
+class UniformDistribution(Distribution):
+    def __init__(self, min_value=0, max_value=1):
+        self.min_value = min_value
+        self.max_value = max_value
+        self.reset()
+
+    def reset(self):
+        random.seed(0)
+
+    def random(self):
+        return random.uniform(self.min_value, self.max_value)
+
+    def _pdf(self, x):
+        if self.min_value <= x <= self.max_value:
+            return 1 / (self.max_value - self.min_value)
+        else:
+            return 0
+
+    def get_pdf(self):
+        return self._pdf
 
 
 class ParetoDistribution(Distribution):
@@ -74,3 +116,22 @@ class BetaDistribution(Distribution):
 
     def get_pdf(self):
         return lambda x: beta.pdf(x, self.a, self.b)
+
+
+class MicroRaidenDistribution(Distribution):
+    def __init__(self, client_fraction, server_fullness_dist):
+        self.client_fraction = client_fraction
+        self.server_fullness_dist = server_fullness_dist
+
+    def reset(self):
+        random.seed(0)
+        self.server_fullness_dist.reset()
+
+    def random(self):
+        if random.uniform(0, 1) < self.client_fraction:
+            return 0
+        else:
+            return self.server_fullness_dist.random() / 2 + 0.5
+
+    def get_pdf(self):
+        return self.server_fullness_dist.get_pdf()

@@ -12,33 +12,20 @@ from raidensim.network.path_finding_helper import PathFindingHelper
 
 class ChannelNetwork(nx.DiGraph):
     MAX_ID = 2 ** 32
-    MAX_DISTANCE_FRACTION = 1 / 3
-    MAX_DISTANCE = MAX_DISTANCE_FRACTION * MAX_ID
 
     def __init__(self, config: NetworkConfiguration):
         nx.DiGraph.__init__(self)
         self.config = config
-        self.node_by_id = dict()
         self.helpers = []
-
-        self.generate_nodes(config)
+        self.generate_nodes()
         # cn.generate_helpers(config)
-        self.connect_nodes(config.open_strategy)
+        self.connect_nodes()
 
-    def generate_nodes(self, config: NetworkConfiguration):
-        for i in range(config.num_nodes):
+    def generate_nodes(self):
+        for i in range(self.config.num_nodes):
             uid = random.randrange(self.MAX_ID)
-            fullness = config.fullness_dist.random()
-            node = Node(
-                self,
-                uid,
-                fullness,
-                config.get_max_initiated_channels(fullness),
-                config.get_max_accepted_channels(fullness),
-                config.get_max_channels(fullness),
-                config.get_channel_deposit(fullness)
-            )
-            self.add_node(node)
+            fullness = self.config.fullness_dist.random()
+            self.add_node(Node(self, uid, fullness))
 
     def generate_helpers(self, config: NetworkConfiguration):
         for i in range(config.ph_num_helpers):
@@ -48,7 +35,7 @@ class ChannelNetwork(nx.DiGraph):
             range_ = random.randrange(min_range, max_range)
             self.helpers.append(PathFindingHelper(self, range_, center))
 
-    def connect_nodes(self, open_strategy='bi_closest_fuller'):
+    def connect_nodes(self):
         print('Connecting nodes.')
         tic = time.time()
         for i, node in enumerate(self.nodes):
@@ -56,17 +43,28 @@ class ChannelNetwork(nx.DiGraph):
             if toc - tic > 5:
                 tic = toc
                 print('Connecting node {}/{}'.format(i, len(self.nodes)))
-            node.initiate_channels(open_strategy)
+            self.config.network_strategy.connect(node)
 
-        del_nodes = []
-        for node in self.nodes:
-            if not node.partners:
-                print("Not connected: {}. Removing.".format(node))
-                del_nodes.append(node)
-            elif len(node.partners) < 2:
-                print("Weakly connected: {}".format(node))
+        connected_nodes = {node for edge in self.edges for node in edge}
+        disconnected_nodes = [node for node in self.nodes if node not in connected_nodes]
+        if disconnected_nodes:
+            print('Removing disconnected nodes: {}'.format(disconnected_nodes))
+            self.remove_nodes_from(disconnected_nodes)
 
-        self.remove_nodes_from(del_nodes)
+    def update_channel_cache(self, a: Node, b: Node):
+        ab = self.edges.get((a, b))
+        ba = self.edges.get((b, a))
+        if ab is not None and ba is not None:
+            net_balance = ab['balance'] - ba['balance']
+            ab['net_balance'] = net_balance
+            ba['net_balance'] = -net_balance
+            deposit_a = ab['deposit']
+            deposit_b = ba['deposit']
+            ab['capacity'] = deposit_a - net_balance
+            ba['capacity'] = deposit_b + net_balance
+            imbalance = deposit_b - deposit_a + 2 * net_balance
+            ab['imbalance'] = imbalance
+            ba['imbalance'] = -imbalance
 
     def ring_distance(self, a: Union[int, Node], b: Union[int, Node]):
         if isinstance(a, int):
@@ -80,36 +78,39 @@ class ChannelNetwork(nx.DiGraph):
         filtered_nodes = [n for n in self.nodes if not filter_ or filter_(n)]
         return sorted(filtered_nodes, key=lambda n: self.ring_distance(n.uid, target_id))
 
-    def find_path_global(self, source: Node, target: Node, value: int, edge_cost_mode='constant'):
-        self._update_edge_costs(edge_cost_mode, value)
-        try:
-            return nx.dijkstra_path(self, source, target)
-        except nx.NetworkXNoPath:
-            return None
-
-    def _get_edge_cost_constant(self, a: Node, b: Node):
+    @staticmethod
+    def _get_edge_cost_constant(a: Node, b: Node, attrs: dict, value: int):
         return 1
 
-    def _get_edge_cost_net_balance(self, a: Node, b: Node):
+    @staticmethod
+    def _get_edge_cost_net_balance(a: Node, b: Node, attrs: dict, value: int):
         # Sigmoid function.
-        return 1 - 1 / (1 + math.exp(-a.get_net_balance(b)))
+        return 1 / (1 + math.exp(-(attrs['net_balance'] + value)))
 
-    def _get_edge_cost_imbalance(self, a: Node, b: Node):
+    @staticmethod
+    def _get_edge_cost_imbalance(a: Node, b: Node, attrs: dict, value: int):
         # Sigmoid function.
-        return 1 - 1 / (1 + math.exp(-a.get_imbalance(b)))
+        return 1 / (1 + math.exp(attrs['imbalance'] - 2 * value))
 
-    EDGE_COST_MODES = {
-        'constant': _get_edge_cost_constant,
-        'net-balance': _get_edge_cost_net_balance,
-        'imbalance': _get_edge_cost_imbalance,
-    }
+    def find_path_global(self, source: Node, target: Node, value: int, edge_cost_mode='constant'):
+        edge_cost_modes = {
+            'constant': self._get_edge_cost_constant,
+            'net-balance': self._get_edge_cost_net_balance,
+            'imbalance': self._get_edge_cost_imbalance,
+        }
 
-    def _update_edge_costs(self, edge_cost_mode: str, value: int):
-        for a, b in self.edges:
-            if a.get_capacity(b) < value:
-                self.edges[a,b]['weight'] = None
-            else:
-                self.edges[a,b]['weight'] = self.EDGE_COST_MODES[edge_cost_mode](self, a, b)
+        edge_cost_detail = edge_cost_modes[edge_cost_mode]
+
+        def edge_cost(a: Node, b: Node, attrs: dict):
+            # Faster condition first.
+            if attrs['capacity'] > value:
+                return edge_cost_detail(a, b, attrs, value)
+            return None
+
+        try:
+            return nx.dijkstra_path(self, source, target, weight=edge_cost)
+        except nx.NetworkXNoPath:
+            return None
 
     def find_path_with_helper(self, source: Node, target: Node, value):
         """
@@ -136,4 +137,7 @@ class ChannelNetwork(nx.DiGraph):
             b = path[i + 1]
             if a.get_capacity(b) < value:
                 print('Warning: Transfer ({} -> {}: {}) exceeds capacity.'.format(a, b, value))
-            self.edges[a, b]['balance'] += value
+            ab = self.edges[a, b]
+            ab['balance'] += value
+            # Update redundant/cached values for faster Dijkstra routing.
+            self.update_channel_cache(a, b)

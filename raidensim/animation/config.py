@@ -1,5 +1,4 @@
-from raidensim.network import NetworkConfiguration
-from raidensim.network.dist import Distribution
+from raidensim.network.config import NetworkConfiguration
 
 
 class AnimationConfiguration:

@@ -5,7 +5,6 @@ import math
 import os
 
 import time
-from collections import defaultdict
 from typing import List
 
 from raidensim.network.channel_network import ChannelNetwork
@@ -105,11 +104,12 @@ def simulate_transfers(cn: ChannelNetwork, num_transfers: int, value: int, fee_m
 
     failed = 0
     tic = time.time()
+    subtic = tic
     for i in range(num_transfers):
         toc = time.time()
-        if toc - tic > 5:
+        if toc - subtic > 5:
             # Progress report every 5 seconds.
-            tic = toc
+            subtic = toc
             print('Transfer {}/{}'.format(i + 1, num_transfers))
 
         source, target = random.sample(cn.nodes, 2)
@@ -126,7 +126,8 @@ def simulate_transfers(cn: ChannelNetwork, num_transfers: int, value: int, fee_m
         else:
             cn.do_transfer(path, value)
 
-    print('Finished. {} transfers failed.'.format(failed))
+    toc = time.time()
+    print('Finished after {} seconds. {} transfers failed.'.format(toc - tic, failed))
     return failed
 
 
