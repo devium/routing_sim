@@ -41,7 +41,9 @@ def simulate_balancing(
     pre_imbalance_stdev = math.sqrt(sum(x**2 for x in pre_imbalances) / len(pre_imbalances))
 
     # Simulation.
-    failed = simulate_transfers(cn, num_transfers, transfer_value, routing_model)
+    failed, avg_length, avg_contacted = simulate_transfers(
+        cn, num_transfers, transfer_value, routing_model
+    )
 
     # Post-simulation evaluation.
     post_capacities = get_channel_capacities(cn)
@@ -85,6 +87,8 @@ def simulate_balancing(
         '',
         'Simulation name: {}'.format(name),
         'Failed transfers: {}'.format(failed),
+        'Average transfer hops: {:.2f}'.format(avg_length),
+        'Average nodes contacted: {:.2f}'.format(avg_contacted),
         'Balance SD before: {:.2f}'.format(pre_net_balance_stdev),
         'Balance SD after: {:.2f}'.format(post_net_balance_stdev),
         'Imbalance SD before: {:.2f}'.format(pre_imbalance_stdev),
@@ -115,7 +119,7 @@ def simulate_transfers(
         num_transfers: int,
         value: int,
         routing_model: RoutingModel
-) -> int:
+) -> (int, float, float):
     """
     Perform transfers between random nodes.
     """
@@ -126,7 +130,7 @@ def simulate_transfers(
 
     failed = 0
     sum_path_lengths = 0
-    sum_path_attempts = 0
+    sum_contacted = 0
     tic = time.time()
     subtic = tic
     for i in range(num_transfers):
@@ -150,11 +154,12 @@ def simulate_transfers(
         else:
             cn.do_transfer(path, value)
             sum_path_lengths += len(path)
-            sum_path_attempts += len(path_history)
+            sum_contacted += len({node for subpath in path_history for node in subpath})
 
     toc = time.time()
     print('Finished after {} seconds. {} transfers failed.'.format(toc - tic, failed))
-    return failed
+    success = num_transfers - failed
+    return failed, sum_path_lengths/success, sum_contacted/success
 
 
 def get_channel_counts(cn: ChannelNetwork) -> List[int]:

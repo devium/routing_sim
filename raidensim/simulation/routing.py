@@ -43,6 +43,10 @@ def simulate_routing(
         dirpath = os.path.join(dirpath, 'routing_{}_{}'.format(config.num_nodes, ip))
         os.makedirs(dirpath, exist_ok=True)
         source, target = random.sample(nodes_sorted, 2)
+        filename = 'nodes.png'
+        draw2d(
+            cn, highlighted_nodes=[[], [source, target]], filepath=os.path.join(dirpath, filename)
+        )
 
         for ir, routing_model in enumerate(routing_models):
             routing_name = '{}_{}'.format(ir, routing_model.__class__.__name__)

@@ -58,14 +58,16 @@ OUT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, '../out'))
 
 
 NETWORK_CONFIG_RAIDEN_NETWORK = NetworkConfiguration(
-    num_nodes=100,
+    num_nodes=2000,
     # fullness_dist=CircleDistribution(),
     # fullness_dist=ParetoDistribution(5, 0, 1),
     fullness_dist=BetaDistribution(0.5, 2),
     network_strategy=RaidenNetworkStrategy(
         min_incoming_deposit=0.2,
         max_network_distance=1/3,
-        max_initiated_channels=(2, 10),
+        kademlia_targets_per_cycle=4,
+        max_initiated_channels=(2, 8),
+        max_accepted_channels=(10, 20),
         deposit=(4, 100)
     )
 )
@@ -98,7 +100,15 @@ def run():
         constant_routing,
         bfs_routing
     ]
-    simulate_routing(config, OUT_DIR, num_paths=4, value=5, routing_models=routing_models)
+    simulate_routing(config, OUT_DIR, num_paths=1, value=1, routing_models=routing_models)
+    simulate_balancing(
+        config,
+        OUT_DIR,
+        num_transfers=5000,
+        transfer_value=1,
+        routing_model=bfs_routing,
+        name='bfs'
+    )
     # simulate_balancing(
     #     config,
     #     OUT_DIR,
@@ -123,6 +133,7 @@ def run():
     #     routing_model=imbalance_routing,
     #     name='imbalance'
     # )
+
 
 if __name__ == '__main__':
     run()

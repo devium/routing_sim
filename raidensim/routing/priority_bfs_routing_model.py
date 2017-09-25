@@ -3,10 +3,11 @@ from typing import Callable, List
 
 from raidensim.network.channel_network import ChannelNetwork
 from raidensim.network.node import Node
+from raidensim.routing.routing_model import RoutingModel
 from raidensim.types import Path
 
 
-class PriorityBFSRoutingModel:
+class PriorityBFSRoutingModel(RoutingModel):
     def __init__(
             self,
             priority_model: Callable[[ChannelNetwork, Node, Node, Node, Node], float],

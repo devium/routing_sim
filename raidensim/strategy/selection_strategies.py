@@ -10,22 +10,37 @@ from raidensim.strategy.strategy import SelectionStrategy, NodeConnectionData
 
 
 class KademliaSelectionStrategy(SelectionStrategy):
-    def __init__(self, max_network_distance, **kwargs):
+    """
+    Connects nodes with closer nodes first, increasing the target distance exponentially for each
+    new target.
+
+    For each node, a desired target distance is computed. Then, a node is searched that comes
+    closest to this distance (in either direction).
+
+    Desired target distance starts at 1 and increases up to `max_network_distance` at the
+    `targets_per_cycle - 1`th target. This cycle is repeated until enough connections have been
+    established or no more target nodes can be found.
+
+    This results in a network with dense connections in their vicinity and fewer connections to
+    more distant nodes.
+    """
+    def __init__(self, max_network_distance, targets_per_cycle, **kwargs):
         SelectionStrategy.__init__(self, **kwargs)
         self.max_network_distance = max_network_distance
+        self.targets_per_cycle=targets_per_cycle
 
         # Cached network information.
         self.cached_cn = None
         self.node_ids_sorted = []
         self.node_id_to_node = {}
 
-    @staticmethod
-    def _distances(max_distance) -> Iterable[int]:
-        cycle_length = int(math.log(max_distance, 2))
+    def _distances(self, max_distance: float) -> Iterable[int]:
         i = 0
+        distance_base = max_distance ** (1 / (self.targets_per_cycle - 1))
+
         while True:
-            yield 2 ** i
-            i = (i + 1) % cycle_length
+            yield distance_base ** i
+            i = (i + 1) % self.targets_per_cycle
 
     def _update_network_cache(self, cn: ChannelNetwork):
         # Best guess on an up-to-date cache. Not an issue with constant-node networks.
@@ -40,7 +55,7 @@ class KademliaSelectionStrategy(SelectionStrategy):
             self, node: NodeConnectionData, node_to_connection_data: Dict[Node, Dict[str, Any]]
     ) -> Iterable[NodeConnectionData]:
         self._update_network_cache(node[0].cn)
-        max_distance = int(self.max_network_distance * node[0].cn.MAX_ID)
+        max_distance = self.max_network_distance * node[0].cn.MAX_ID
         distances = self._distances(max_distance)
         while True:
             target_id = (node[0].uid + next(distances)) % node[0].cn.MAX_ID

@@ -6,7 +6,7 @@ from raidensim.strategy.filter_strategies import (
     DistanceFilterStrategy,
     FullerFilterStrategy,
     MinIncomingDepositFilterStrategy,
-    MicroRaidenServerFilterStrategy, NotConnectedFilterStrategy)
+    MicroRaidenServerFilterStrategy, NotConnectedFilterStrategy, AcceptedLimitsFilterStrategy)
 from raidensim.strategy.selection_strategies import KademliaSelectionStrategy, \
     RandomSelectionStrategy
 from raidensim.strategy.strategy import NetworkStrategy
@@ -47,12 +47,17 @@ class RaidenNetworkStrategy(NetworkStrategy):
             self,
             min_incoming_deposit: float,
             max_network_distance: float,
+            kademlia_targets_per_cycle: float,
             max_initiated_channels: Range,
+            max_accepted_channels: Range,
             deposit: Range
 
     ):
         def initiated_channels_mapping(fullness: Fullness):
             return self._linear(*max_initiated_channels, fullness)
+
+        def accepted_channels_mapping(fullness: Fullness):
+            return self._linear(*max_accepted_channels, fullness)
 
         def deposit_mapping(fullness: Fullness):
             return self._linear(*deposit, fullness)
@@ -62,11 +67,13 @@ class RaidenNetworkStrategy(NetworkStrategy):
             NotConnectedFilterStrategy(),
             DistanceFilterStrategy(max_network_distance),
             FullerFilterStrategy(),
+            AcceptedLimitsFilterStrategy(accepted_channels_mapping),
             MinIncomingDepositFilterStrategy(deposit_mapping, min_incoming_deposit)
         ]
 
         selection_strategy = KademliaSelectionStrategy(
             max_network_distance=max_network_distance,
+            targets_per_cycle=kademlia_targets_per_cycle,
             filter_strategies=filter_strategies
         )
 

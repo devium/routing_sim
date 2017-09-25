@@ -18,7 +18,9 @@ NETWORK_CONFIG_RAIDEN_NETWORK = NetworkConfiguration(
     network_strategy=RaidenNetworkStrategy(
         min_incoming_deposit=0.2,
         max_network_distance=1/3,
+        kademlia_targets_per_cycle=4,
         max_initiated_channels=(2, 10),
+        max_accepted_channels=(10, 20),
         deposit=(4, 100)
     )
 )
