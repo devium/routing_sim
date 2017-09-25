@@ -47,7 +47,9 @@ from raidensim.network.dist import (
     MicroRaidenDistribution,
     CircleDistribution
 )
-from raidensim.simulation import simulate_routing
+from raidensim.routing.global_routing_model import GlobalRoutingModel
+from raidensim.routing.priority_bfs_routing_model import PriorityBFSRoutingModel
+from raidensim.simulation import simulate_routing, simulate_balancing
 
 from raidensim.strategy.network_strategies import RaidenNetworkStrategy, MicroRaidenNetworkStrategy
 
@@ -56,7 +58,7 @@ OUT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, '../out'))
 
 
 NETWORK_CONFIG_RAIDEN_NETWORK = NetworkConfiguration(
-    num_nodes=1000,
+    num_nodes=100,
     # fullness_dist=CircleDistribution(),
     # fullness_dist=ParetoDistribution(5, 0, 1),
     fullness_dist=BetaDistribution(0.5, 2),
@@ -82,17 +84,44 @@ NETWORK_CONFIG_MICRORAIDEN = NetworkConfiguration(
 
 
 def run():
+    # Network configuration.
     config = NETWORK_CONFIG_RAIDEN_NETWORK
     # config = NETWORK_CONFIG_MICRORAIDEN
-    simulate_routing(config, OUT_DIR, num_paths=1, value=5)
+
+    # Routing models.
+    constant_routing = GlobalRoutingModel(GlobalRoutingModel.fee_model_constant)
+    net_balance_routing = GlobalRoutingModel(GlobalRoutingModel.fee_model_net_balance)
+    imbalance_routing = GlobalRoutingModel(GlobalRoutingModel.fee_model_imbalance)
+    bfs_routing = PriorityBFSRoutingModel(PriorityBFSRoutingModel.distance_priority)
+
+    routing_models = [
+        constant_routing,
+        bfs_routing
+    ]
+    simulate_routing(config, OUT_DIR, num_paths=4, value=5, routing_models=routing_models)
     # simulate_balancing(
-    #     config, OUT_DIR, num_transfers=1000, transfer_value=1, fee_model='constant'
+    #     config,
+    #     OUT_DIR,
+    #     num_transfers=1000,
+    #     transfer_value=1,
+    #     routing_model=constant_routing,
+    #     name='constant'
     # )
     # simulate_balancing(
-    #     config, OUT_DIR, num_transfers=1000, transfer_value=1, fee_model='net-balance'
+    #     config,
+    #     OUT_DIR,
+    #     num_transfers=1000,
+    #     transfer_value=1,
+    #     routing_model=net_balance_routing,
+    #     name='net-balance'
     # )
     # simulate_balancing(
-    #     config, OUT_DIR, num_transfers=1000, transfer_value=1, fee_model='imbalance'
+    #     config,
+    #     OUT_DIR,
+    #     num_transfers=1000,
+    #     transfer_value=1,
+    #     routing_model=imbalance_routing,
+    #     name='imbalance'
     # )
 
 if __name__ == '__main__':

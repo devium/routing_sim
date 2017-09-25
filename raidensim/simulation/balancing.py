@@ -7,8 +7,11 @@ import os
 import time
 from typing import List
 
+import matplotlib.pyplot as plt
+
 from raidensim.network.channel_network import ChannelNetwork
 from raidensim.network.config import NetworkConfiguration
+from raidensim.routing.routing_model import RoutingModel
 
 
 def simulate_balancing(
@@ -16,14 +19,18 @@ def simulate_balancing(
         out_dir,
         num_transfers: int,
         transfer_value: int,
-        fee_model: str
+        routing_model: RoutingModel,
+        name: str
 ):
-    import matplotlib.pyplot as plt
-
+    """
+    Simulates network transfers under the given fee model and plots some statistics.
+    """
+    # Setup network.
     random.seed(0)
     config.fullness_dist.reset()
     cn = ChannelNetwork(config)
 
+    # Baseline data.
     pre_capacities = get_channel_capacities(cn)
     pre_net_balances = get_channel_net_balances(cn)
     pre_imbalances = get_channel_imbalances(cn)
@@ -33,8 +40,10 @@ def simulate_balancing(
     pre_net_balance_stdev = math.sqrt(sum(x**2 for x in pre_net_balances) / len(pre_net_balances))
     pre_imbalance_stdev = math.sqrt(sum(x**2 for x in pre_imbalances) / len(pre_imbalances))
 
-    failed = simulate_transfers(cn, num_transfers, transfer_value, fee_model)
+    # Simulation.
+    failed = simulate_transfers(cn, num_transfers, transfer_value, routing_model)
 
+    # Post-simulation evaluation.
     post_capacities = get_channel_capacities(cn)
     post_net_balances = get_channel_net_balances(cn)
     post_imbalances = get_channel_imbalances(cn)
@@ -51,6 +60,7 @@ def simulate_balancing(
     max_imbalance = max(pre_imbalances + post_imbalances)
     max_num_channels = max(nums_channels)
 
+    # Plots.
     fig, axs = plt.subplots(2, 4)
     fig.set_size_inches(16, 8)
 
@@ -60,9 +70,9 @@ def simulate_balancing(
     axs[1][1].hist(post_net_balances, bins=50, range=[0, max_net_balance], edgecolor='black')
     axs[0][2].hist(pre_imbalances, bins=50, range=[0, max_imbalance], edgecolor='black')
     axs[1][2].hist(post_imbalances, bins=50, range=[0, max_imbalance], edgecolor='black')
-    axs[0][3].hist(nums_channels, bins=range(max_num_channels + 2), align='left', edgecolor='black')
-    axs[0][3].xaxis.set_ticks(range(0, max_num_channels + 1, 2))
-    axs[0][3].xaxis.set_ticks(range(1, max_num_channels + 1, 2), minor=True)
+    axs[0][3].hist(
+        nums_channels, bins=range(max_num_channels + 2), align='left', edgecolor='black'
+    )
 
     # Stats plot (labels only).
     labels = [
@@ -73,7 +83,7 @@ def simulate_balancing(
         'Top row: initial network state',
         'Bottom row: after {} transfers'.format(num_transfers),
         '',
-        'Fee model: {}'.format(fee_model),
+        'Simulation name: {}'.format(name),
         'Failed transfers: {}'.format(failed),
         'Balance SD before: {:.2f}'.format(pre_net_balance_stdev),
         'Balance SD after: {:.2f}'.format(post_net_balance_stdev),
@@ -89,20 +99,34 @@ def simulate_balancing(
     axs[1][1].set_xlabel('Channel net balance (abs)')
     axs[1][2].set_xlabel('Channel imbalance')
     axs[0][3].set_xlabel('Channel count per node')
+    axs[0][3].xaxis.set_ticks(range(0, max_num_channels + 1, 2))
+    axs[0][3].xaxis.set_ticks(range(1, max_num_channels + 1, 2), minor=True)
     axs[1][3].axis('off')
 
     os.makedirs(out_dir, exist_ok=True)
-    filename = 'balancing_{}_{}_{}.png'.format(config.num_nodes, num_transfers, fee_model)
+    filename = 'balancing_{}_{}_{}.png'.format(
+        config.num_nodes, num_transfers, name
+    )
     fig.savefig(os.path.join(out_dir, filename))
 
 
-def simulate_transfers(cn: ChannelNetwork, num_transfers: int, value: int, fee_model: str) -> int:
+def simulate_transfers(
+        cn: ChannelNetwork,
+        num_transfers: int,
+        value: int,
+        routing_model: RoutingModel
+) -> int:
+    """
+    Perform transfers between random nodes.
+    """
     num_channels_uni = len(cn.edges)
     print('Simulating {} transfers between {} nodes over {} bidirectional channels.'.format(
         num_transfers, len(cn.nodes), num_channels_uni // 2
     ))
 
     failed = 0
+    sum_path_lengths = 0
+    sum_path_attempts = 0
     tic = time.time()
     subtic = tic
     for i in range(num_transfers):
@@ -117,7 +141,7 @@ def simulate_transfers(cn: ChannelNetwork, num_transfers: int, value: int, fee_m
         while max(source.get_capacity(partner) for partner in source.partners) < value:
             source, target = random.sample(cn.nodes, 2)
 
-        path = cn.find_path_global(source, target, value, fee_model)
+        path, path_history = routing_model.route(source, target, value)
         if not path:
             print('No Path found from {} to {} that could sustain {} token(s).'.format(
                 source, target, value
@@ -125,6 +149,8 @@ def simulate_transfers(cn: ChannelNetwork, num_transfers: int, value: int, fee_m
             failed += 1
         else:
             cn.do_transfer(path, value)
+            sum_path_lengths += len(path)
+            sum_path_attempts += len(path_history)
 
     toc = time.time()
     print('Finished after {} seconds. {} transfers failed.'.format(toc - tic, failed))

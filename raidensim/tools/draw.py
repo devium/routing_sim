@@ -110,9 +110,11 @@ def draw2d(
         alpha = 0.6 if helper == helper_highlight else 0.2
         ax.add_artist(Wedge((0, 0), radius, sangle, eangle, color=color, alpha=alpha))
 
-    nx.draw_networkx(cn, pos, edge_color=edge_color, node_size=1, with_labels=False, ax=ax)
+    nx.draw_networkx(
+        cn, pos, edge_color=edge_color, node_size=1, with_labels=False, ax=ax, arrows=False
+    )
     if path:
-        nx.draw_networkx_edges(cn, pos, edgelist=path_to_edges(path), edge_color='r')
+        nx.draw_networkx_edges(cn, pos, edgelist=path_to_edges(path), edge_color='r', arrows=False)
 
     if draw_labels:
         labels = {node: node.uid for node in cn.nodes}

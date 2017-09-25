@@ -1,74 +1,99 @@
 import random
+from typing import List
 
 import imageio
 import shutil
 
 import os
 
+from raidensim.routing.routing_model import RoutingModel
 from raidensim.tools import draw2d
 from raidensim.network.channel_network import ChannelNetwork
 from raidensim.network.config import NetworkConfiguration
 
 
-def simulate_routing(config: NetworkConfiguration, out_dir, num_paths=10, value=2):
+def simulate_routing(
+        config: NetworkConfiguration,
+        out_dir: str,
+        num_paths: int,
+        value: int,
+        routing_models: List[RoutingModel]
+):
+    # Setup network.
     config.fullness_dist.reset()
     random.seed(0)
-
     cn = ChannelNetwork(config)
+
+    # Prepare folder.
+    dirpath = os.path.join(out_dir, 'routing_{}'.format(config.num_nodes))
+    shutil.rmtree(dirpath, ignore_errors=True)
+    os.makedirs(dirpath, exist_ok=True)
+
+    # Plot baseline network.
     filename = 'routing_{}.png'.format(config.num_nodes)
-    draw2d(cn, filepath=os.path.join(out_dir, filename))
+    draw2d(cn, filepath=os.path.join(dirpath, filename))
     filename = 'routing_{}_labels.png'.format(config.num_nodes)
-    draw2d(cn, draw_labels=True, filepath=os.path.join(out_dir, filename))
+    draw2d(cn, draw_labels=True, filepath=os.path.join(dirpath, filename))
 
-    for i in range(num_paths):
-        dirpath = os.path.join(out_dir, 'routing_{}_{}'.format(config.num_nodes, i))
-        shutil.rmtree(dirpath, ignore_errors=True)
+    # Perform routing.
+    # cn.nodes order is non-deterministic. Sort for reproducible sampling.
+    nodes_sorted = sorted(cn.nodes, key=lambda node: node.uid)
+    for ip in range(num_paths):
+        print('Path #{}'.format(ip))
+        dirpath = os.path.join(dirpath, 'routing_{}_{}'.format(config.num_nodes, ip))
         os.makedirs(dirpath, exist_ok=True)
+        source, target = random.sample(nodes_sorted, 2)
 
-        print("-" * 40)
-        source, target = random.sample(cn.nodes, 2)
+        for ir, routing_model in enumerate(routing_models):
+            routing_name = '{}_{}'.format(ir, routing_model.__class__.__name__)
 
-        # Global routing (Dijkstra).
-        print('Global routing:')
-        path = cn.find_path_global(source, target, value)
-        if path:
-            print('Found path of length {}: {}'.format(len(path), path))
-        else:
-            print('No path found.')
-        filename = 'global.png'
-        draw2d(cn, path, [path, [source, target]], filepath=os.path.join(dirpath, filename))
+            print(routing_name)
+            path, path_history = routing_model.route(source, target, value)
 
-        # Priority-BFS routing.
-        print('BFS routing:')
-        _, path, path_history = source.find_path_bfs(target, value, priority_model='distance')
-        if path:
-            print('Found path of length {}: {}'.format(len(path), path))
-        else:
-            print('No path found.')
-        visited = {source}
-        gif_filenames = []
-        for j, subpath in enumerate(path_history):
-            visited |= set(subpath)
-            filename = 'bfs_{}.png'.format(j)
-            gif_filenames.append(filename)
-            draw2d(
-                cn, subpath, [visited, [source, target]], filepath=os.path.join(dirpath, filename)
-            )
-        print('Contacted {} nodes in the process: {}'.format(len(visited), visited))
-        filename = 'bfs.png'
-        gif_filenames.append(filename)
-        draw2d(cn, path, [visited, [source, target]], filepath=os.path.join(dirpath, filename))
+            dirpath = os.path.join(dirpath, routing_name)
+            os.makedirs(dirpath, exist_ok=True)
+            if path:
+                print('Found path of length {}: {}'.format(len(path), path))
+                filename = 'path.png'
+                draw2d(
+                    cn, path, [path, [source, target]], filepath=os.path.join(dirpath, filename)
+                )
+            else:
+                print('No path found.')
 
-        filename = 'bfs_animation.gif'
-        with imageio.get_writer(os.path.join(dirpath, filename), mode='I', fps=3) as writer:
-            for filename in gif_filenames:
-                image = imageio.imread(os.path.join(dirpath, filename))
-                writer.append_data(image)
+            if path_history:
+                # Plot path evolution.
+                gif_filenames = []
+                visited = {source}
+                for isp, subpath in enumerate(path_history):
+                    visited |= set(subpath)
+                    filename = 'step_{:04d}.png'.format(isp)
+                    gif_filenames.append(filename)
+                    draw2d(
+                        cn, subpath, [visited, [source, target]],
+                        filepath=os.path.join(dirpath, filename)
+                    )
+                num_wrong_turns = 0
+                for isp in range(len(path_history) - 1):
+                    prev = path_history[isp]
+                    curr = path_history[isp + 1]
+                    if prev != curr[:-1]:
+                        num_wrong_turns += 1
 
-        # print('Path finding with helpers.')
-        # path, helper = cn.find_path_with_helper(source, target, value)
-        # if path:
-        #     print(len(path), path)
-        # else:
-        #     print('No direct path to target sector.')
-        # draw(cn, path, None, helper)
+                print('Took {} wrong turn(s).'.format(num_wrong_turns))
+                print('Contacted {} distinct nodes in the process: {}'.format(
+                    len(visited), visited)
+                )
+                gif_filenames.append(filename)
+                draw2d(cn, path, [visited, [source, target]],
+                       filepath=os.path.join(dirpath, filename))
+
+                filename = 'animation.gif'
+                with imageio.get_writer(os.path.join(dirpath, filename), mode='I',
+                                        fps=3) as writer:
+                    for filename in gif_filenames:
+                        image = imageio.imread(os.path.join(dirpath, filename))
+                        writer.append_data(image)
+
+            dirpath = os.path.dirname(dirpath)
+        dirpath = os.path.dirname(dirpath)

@@ -1,10 +1,10 @@
-import math
 import random
 from typing import Callable, List, Union
 
 import networkx as nx
 import time
 
+from raidensim.types import Path
 from .config import NetworkConfiguration
 from raidensim.network.node import Node
 from raidensim.network.path_finding_helper import PathFindingHelper
@@ -78,40 +78,6 @@ class ChannelNetwork(nx.DiGraph):
         filtered_nodes = [n for n in self.nodes if not filter_ or filter_(n)]
         return sorted(filtered_nodes, key=lambda n: self.ring_distance(n.uid, target_id))
 
-    @staticmethod
-    def _get_edge_cost_constant(a: Node, b: Node, attrs: dict, value: int):
-        return 1
-
-    @staticmethod
-    def _get_edge_cost_net_balance(a: Node, b: Node, attrs: dict, value: int):
-        # Sigmoid function.
-        return 1 / (1 + math.exp(-(attrs['net_balance'] + value)))
-
-    @staticmethod
-    def _get_edge_cost_imbalance(a: Node, b: Node, attrs: dict, value: int):
-        # Sigmoid function.
-        return 1 / (1 + math.exp(attrs['imbalance'] - 2 * value))
-
-    def find_path_global(self, source: Node, target: Node, value: int, edge_cost_mode='constant'):
-        edge_cost_modes = {
-            'constant': self._get_edge_cost_constant,
-            'net-balance': self._get_edge_cost_net_balance,
-            'imbalance': self._get_edge_cost_imbalance,
-        }
-
-        edge_cost_detail = edge_cost_modes[edge_cost_mode]
-
-        def edge_cost(a: Node, b: Node, attrs: dict):
-            # Faster condition first.
-            if attrs['capacity'] > value:
-                return edge_cost_detail(a, b, attrs, value)
-            return None
-
-        try:
-            return nx.dijkstra_path(self, source, target, weight=edge_cost)
-        except nx.NetworkXNoPath:
-            return None
-
     def find_path_with_helper(self, source: Node, target: Node, value):
         """
         Find a path to the target using pathfinding helpers that know about channel balances in
@@ -131,7 +97,7 @@ class ChannelNetwork(nx.DiGraph):
 
         return None, None
 
-    def do_transfer(self, path: List[Node], value: int):
+    def do_transfer(self, path: Path, value: int):
         for i in range(len(path) - 1):
             a = path[i]
             b = path[i + 1]

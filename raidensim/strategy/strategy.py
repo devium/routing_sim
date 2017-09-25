@@ -56,4 +56,4 @@ class NetworkStrategy(object):
                 target = next(targets)
                 self.connection_strategy.connect((node, node_data), target)
         except StopIteration:
-            print('Out of suitable nodes.')
+            print('Out of suitable nodes for {}.'.format(node))
