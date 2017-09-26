@@ -7,19 +7,21 @@ from raidensim.network.dist import (
     CircleDistribution,
     ParetoDistribution,
     BetaDistribution,
-    MicroRaidenDistribution)
+    MicroRaidenDistribution
+)
+from raidensim.routing.priority_bfs_routing_model import PriorityRoutingModel, distance_priority
 from raidensim.strategy.network_strategies import RaidenNetworkStrategy, MicroRaidenNetworkStrategy
 
 NETWORK_CONFIG_RAIDEN_NETWORK = NetworkConfiguration(
-    num_nodes=200,
+    num_nodes=500,
     fullness_dist=CircleDistribution(),
     # fullness_dist=ParetoDistribution(5, 0, 1),
     # fullness_dist=BetaDistribution(0.5, 2),
     network_strategy=RaidenNetworkStrategy(
         min_incoming_deposit=0.2,
-        max_network_distance=1/3,
+        max_network_distance=1/8,
         kademlia_targets_per_cycle=4,
-        max_initiated_channels=(2, 10),
+        max_initiated_channels=(4, 10),
         max_accepted_channels=(10, 20),
         deposit=(4, 100)
     )
@@ -41,6 +43,7 @@ OUT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, '../blender/data'))
 ANIMATION_CONFIG = AnimationConfiguration(
     out_dir=OUT_DIR,
     network=NETWORK_CONFIG_RAIDEN_NETWORK,
+    routing_model=PriorityRoutingModel(distance_priority),
     popup_channels=False,
     animation_length=5,
     transfer_hop_delay=0.08,

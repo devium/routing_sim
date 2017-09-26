@@ -226,7 +226,7 @@ class AnimationGenerator(object):
                     break
             else:
                 source, target = random.sample(self.visible_nodes, 2)
-                path = self.cn.find_path_global(source, target, self.config.transfer_value)
+                path, _ = self.config.routing_model.route(source, target, self.config.transfer_value)
                 if path:
                     # Find channel for each hop.
                     self.flash_route(path)

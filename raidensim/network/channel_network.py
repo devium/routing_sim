@@ -74,29 +74,6 @@ class ChannelNetwork(nx.DiGraph):
         else:
             raise TypeError('Unsupported type.')
 
-    def get_closest_nodes(self, target_id: int, filter_: Callable[[Node], bool]=None):
-        filtered_nodes = [n for n in self.nodes if not filter_ or filter_(n)]
-        return sorted(filtered_nodes, key=lambda n: self.ring_distance(n.uid, target_id))
-
-    def find_path_with_helper(self, source: Node, target: Node, value):
-        """
-        Find a path to the target using pathfinding helpers that know about channel balances in
-        the target address sector.
-        """
-        helpers = (helper for helper in self.helpers if helper.is_in_range(target))
-
-        # FIXME: inter-sector routing
-        # Assume direct entry point into target sector.
-        for helper in helpers:
-            print('Trying to route through helper {} +/- {} to {}.'.format(
-                helper.center, int(helper.range / 2), target.uid
-            ))
-            path = helper.find_path(source, target, value)
-            if path:
-                return path, helper
-
-        return None, None
-
     def do_transfer(self, path: Path, value: int):
         for i in range(len(path) - 1):
             a = path[i]

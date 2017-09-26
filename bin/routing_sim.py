@@ -33,9 +33,9 @@ NETWORK_CONFIG_RAIDEN_NETWORK = NetworkConfiguration(
     fullness_dist=BetaDistribution(0.5, 2),
     network_strategy=RaidenNetworkStrategy(
         min_incoming_deposit=0.2,
-        max_network_distance=1/3,
+        max_network_distance=1/8,
         kademlia_targets_per_cycle=4,
-        max_initiated_channels=(2, 8),
+        max_initiated_channels=(4, 10),
         max_accepted_channels=(10, 20),
         deposit=(4, 100)
     )
@@ -75,14 +75,14 @@ def run():
 
     # Network scale simulation.
     routing_models = [
-        ('priority_distance', distance_priority_routing),
+        # ('priority_distance', distance_priority_routing),
         ('priority_net_balance', distance_net_balance_priority_routing)
     ]
     for name, routing_model in routing_models:
         simulate_balancing(
             config,
             OUT_DIR,
-            num_transfers=1000,
+            num_transfers=10000,
             transfer_value=1,
             routing_model=routing_model,
             name=name,
