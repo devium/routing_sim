@@ -63,8 +63,8 @@ def simulate_balancing(
     max_num_channels = max(nums_channels)
 
     # Plots.
-    fig, axs = plt.subplots(2, 4)
-    fig.set_size_inches(16, 8)
+    fig, axs = plt.subplots(3, 4)
+    fig.set_size_inches(16, 10)
 
     axs[0][0].hist(pre_capacities, bins=50, edgecolor='black', range=[0, max_capacity])
     axs[1][0].hist(post_capacities, bins=50, edgecolor='black', range=[0, max_capacity])
@@ -75,6 +75,7 @@ def simulate_balancing(
     axs[0][3].hist(
         nums_channels, bins=range(max_num_channels + 2), align='left', edgecolor='black'
     )
+    axs[2][0].hist(failed, bins=50, range=[0, num_transfers], edgecolor='black')
 
     # Stats plot (labels only).
     labels = [
@@ -86,7 +87,7 @@ def simulate_balancing(
         'Bottom row: after {} transfers'.format(num_transfers),
         '',
         'Simulation name: {}'.format(name),
-        'Failed transfers: {}'.format(failed),
+        'Failed transfers: {}'.format(len(failed)),
         'Average transfer hops: {:.2f}'.format(avg_length),
         'Average nodes contacted: {:.2f}'.format(avg_contacted),
         'Balance SD before: {:.2f}'.format(pre_net_balance_stdev),
@@ -106,12 +107,17 @@ def simulate_balancing(
     axs[0][3].xaxis.set_ticks(range(0, max_num_channels + 1, 2))
     axs[0][3].xaxis.set_ticks(range(1, max_num_channels + 1, 2), minor=True)
     axs[1][3].axis('off')
+    axs[2][0].set_xlabel('Transfer #')
+    axs[2][0].set_ylabel('Failed transfers')
+    axs[2][1].axis('off')
+    axs[2][2].axis('off')
+    axs[2][3].axis('off')
 
     os.makedirs(out_dir, exist_ok=True)
     filename = 'balancing_{}_{}_{}.png'.format(
         config.num_nodes, num_transfers, name
     )
-    fig.savefig(os.path.join(out_dir, filename))
+    fig.savefig(os.path.join(out_dir, filename), bbox_inches='tight')
 
 
 def simulate_transfers(
@@ -119,7 +125,7 @@ def simulate_transfers(
         num_transfers: int,
         value: int,
         routing_model: RoutingModel
-) -> (int, float, float):
+) -> (List[int], float, float):
     """
     Perform transfers between random nodes.
     """
@@ -128,7 +134,7 @@ def simulate_transfers(
         num_transfers, len(cn.nodes), num_channels_uni // 2
     ))
 
-    failed = 0
+    failed = []
     sum_path_lengths = 0
     sum_contacted = 0
     tic = time.time()
@@ -150,16 +156,17 @@ def simulate_transfers(
             print('No Path found from {} to {} that could sustain {} token(s).'.format(
                 source, target, value
             ))
-            failed += 1
+            failed.append(i)
         else:
             cn.do_transfer(path, value)
             sum_path_lengths += len(path)
             sum_contacted += len({node for subpath in path_history for node in subpath})
 
     toc = time.time()
-    print('Finished after {} seconds. {} transfers failed.'.format(toc - tic, failed))
-    success = num_transfers - failed
-    return failed, sum_path_lengths/success, sum_contacted/success
+    num_failed = len(failed)
+    num_success = num_transfers - num_failed
+    print('Finished after {} seconds. {} transfers failed.'.format(toc - tic, num_failed))
+    return failed, sum_path_lengths/num_success, sum_contacted/num_success
 
 
 def get_channel_counts(cn: ChannelNetwork) -> List[int]:

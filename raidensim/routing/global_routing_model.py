@@ -35,4 +35,4 @@ class GlobalRoutingModel(RoutingModel):
     @staticmethod
     def fee_model_imbalance(a: Node, b: Node, attrs: dict, value: int) -> float:
         # Sigmoid function.
-        return 1 / (1 + math.exp(attrs['imbalance'] - 2 * value))
+        return 1 / (1 + math.exp(-(attrs['imbalance'] + 2 * value)))

@@ -1,6 +1,8 @@
 import heapq
 from typing import Callable, List
 
+import math
+
 from raidensim.network.channel_network import ChannelNetwork
 from raidensim.network.node import Node
 from raidensim.routing.routing_model import RoutingModel
@@ -10,7 +12,7 @@ from raidensim.types import Path
 class PriorityBFSRoutingModel(RoutingModel):
     def __init__(
             self,
-            priority_model: Callable[[ChannelNetwork, Node, Node, Node, Node], float],
+            priority_model: Callable[[ChannelNetwork, Node, Node, Node, Node, int], float],
             max_paths=100
     ):
         self.priority_model = priority_model
@@ -45,7 +47,7 @@ class PriorityBFSRoutingModel(RoutingModel):
             for partner in node.partners:
                 if partner not in visited and node.get_capacity(partner) >= value:
                     new_path = path + [partner]
-                    priority = self.priority_model(source.cn, source, node, partner, target)
+                    priority = self.priority_model(source.cn, source, node, partner, target, value)
                     i += 1
                     queue_entry = (priority, len(new_path), i, new_path)
                     heapq.heappush(queue, queue_entry)
@@ -55,7 +57,7 @@ class PriorityBFSRoutingModel(RoutingModel):
 
     @staticmethod
     def distance_priority(
-            cn, source: 'Node', current: 'Node', next_: 'Node', target: 'Node'
+            cn, source: 'Node', current: 'Node', next_: 'Node', target: 'Node', value: int
     ) -> float:
         """
         Normalized distance between new node and target node.
@@ -63,3 +65,12 @@ class PriorityBFSRoutingModel(RoutingModel):
         distance == 1 => 180 degrees
         """
         return cn.ring_distance(next_, target) / cn.MAX_ID * 2
+
+    @staticmethod
+    def distance_fee_priority(
+            cn, source: 'Node', current: 'Node', next_: 'Node', target: 'Node', value: int
+    ) -> float:
+        distance = cn.ring_distance(next_, target) / cn.MAX_ID * 2
+        attrs = current.cn.edges[current, next_]
+        fee = 1 / (1 + math.exp(-(attrs['net_balance'] + value)))
+        return distance * fee

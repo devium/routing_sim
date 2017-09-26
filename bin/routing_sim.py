@@ -58,7 +58,7 @@ OUT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, '../out'))
 
 
 NETWORK_CONFIG_RAIDEN_NETWORK = NetworkConfiguration(
-    num_nodes=2000,
+    num_nodes=1000,
     # fullness_dist=CircleDistribution(),
     # fullness_dist=ParetoDistribution(5, 0, 1),
     fullness_dist=BetaDistribution(0.5, 2),
@@ -95,43 +95,52 @@ def run():
     net_balance_routing = GlobalRoutingModel(GlobalRoutingModel.fee_model_net_balance)
     imbalance_routing = GlobalRoutingModel(GlobalRoutingModel.fee_model_imbalance)
     bfs_routing = PriorityBFSRoutingModel(PriorityBFSRoutingModel.distance_priority)
+    bfs_fee_routing = PriorityBFSRoutingModel(PriorityBFSRoutingModel.distance_fee_priority)
 
     routing_models = [
         constant_routing,
         bfs_routing
     ]
-    simulate_routing(config, OUT_DIR, num_paths=1, value=1, routing_models=routing_models)
+    # simulate_routing(config, OUT_DIR, num_paths=1, value=1, routing_models=routing_models)
+    # simulate_balancing(
+    #     config,
+    #     OUT_DIR,
+    #     num_transfers=5000,
+    #     transfer_value=1,
+    #     routing_model=constant_routing,
+    #     name='global-constant'
+    # )
+    simulate_balancing(
+        config,
+        OUT_DIR,
+        num_transfers=5000,
+        transfer_value=1,
+        routing_model=net_balance_routing,
+        name='global-net-balance'
+    )
     simulate_balancing(
         config,
         OUT_DIR,
         num_transfers=5000,
         transfer_value=1,
         routing_model=bfs_routing,
-        name='bfs'
+        name='bfs-distance'
+    )
+    simulate_balancing(
+        config,
+        OUT_DIR,
+        num_transfers=5000,
+        transfer_value=1,
+        routing_model=bfs_fee_routing,
+        name='bfs-net-balance'
     )
     # simulate_balancing(
     #     config,
     #     OUT_DIR,
-    #     num_transfers=1000,
-    #     transfer_value=1,
-    #     routing_model=constant_routing,
-    #     name='constant'
-    # )
-    # simulate_balancing(
-    #     config,
-    #     OUT_DIR,
-    #     num_transfers=1000,
-    #     transfer_value=1,
-    #     routing_model=net_balance_routing,
-    #     name='net-balance'
-    # )
-    # simulate_balancing(
-    #     config,
-    #     OUT_DIR,
-    #     num_transfers=1000,
+    #     num_transfers=5000,
     #     transfer_value=1,
     #     routing_model=imbalance_routing,
-    #     name='imbalance'
+    #     name='global-imbalance'
     # )
 
 
