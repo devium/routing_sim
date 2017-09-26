@@ -103,7 +103,10 @@ class ChannelNetwork(nx.DiGraph):
             b = path[i + 1]
             if a.get_capacity(b) < value:
                 print('Warning: Transfer ({} -> {}: {}) exceeds capacity.'.format(a, b, value))
-            ab = self.edges[a, b]
+            ab = self[a][b]
+            ba = self[b][a]
             ab['balance'] += value
+            ab['num_transfers'] += 1
+            ba['num_transfers'] += 1
             # Update redundant/cached values for faster Dijkstra routing.
             self.update_channel_cache(a, b)

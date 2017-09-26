@@ -30,22 +30,19 @@ def simulate_routing(
     os.makedirs(dirpath, exist_ok=True)
 
     # Plot baseline network.
-    filename = 'routing_{}.png'.format(config.num_nodes)
-    draw2d(cn, filepath=os.path.join(dirpath, filename))
-    filename = 'routing_{}_labels.png'.format(config.num_nodes)
-    draw2d(cn, draw_labels=True, filepath=os.path.join(dirpath, filename))
+    draw2d(cn, filepath=os.path.join(dirpath, 'network'))
+    draw2d(cn, draw_labels=True, filepath=os.path.join(dirpath, 'network_labels'))
 
     # Perform routing.
     # cn.nodes order is non-deterministic. Sort for reproducible sampling.
     nodes_sorted = sorted(cn.nodes, key=lambda node: node.uid)
     for ip in range(num_paths):
         print('Path #{}'.format(ip))
-        dirpath = os.path.join(dirpath, 'routing_{}_{}'.format(config.num_nodes, ip))
+        dirpath = os.path.join(dirpath, 'nodes_{}'.format(ip))
         os.makedirs(dirpath, exist_ok=True)
         source, target = random.sample(nodes_sorted, 2)
-        filename = 'nodes.png'
         draw2d(
-            cn, highlighted_nodes=[[], [source, target]], filepath=os.path.join(dirpath, filename)
+            cn, highlighted_nodes=[[], [source, target]], filepath=os.path.join(dirpath, 'nodes')
         )
 
         for ir, routing_model in enumerate(routing_models):
@@ -88,13 +85,11 @@ def simulate_routing(
                 print('Contacted {} distinct nodes in the process: {}'.format(
                     len(visited), visited)
                 )
-                gif_filenames.append(filename)
-                draw2d(cn, path, [visited, [source, target]],
-                       filepath=os.path.join(dirpath, filename))
 
                 filename = 'animation.gif'
-                with imageio.get_writer(os.path.join(dirpath, filename), mode='I',
-                                        fps=3) as writer:
+                with imageio.get_writer(
+                        os.path.join(dirpath, filename), mode='I', fps=3
+                ) as writer:
                     for filename in gif_filenames:
                         image = imageio.imread(os.path.join(dirpath, filename))
                         writer.append_data(image)

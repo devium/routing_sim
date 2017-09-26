@@ -8,10 +8,12 @@ import time
 from typing import List
 
 import matplotlib.pyplot as plt
+import shutil
 
 from raidensim.network.channel_network import ChannelNetwork
 from raidensim.network.config import NetworkConfiguration
 from raidensim.routing.routing_model import RoutingModel
+from raidensim.tools import draw2d
 
 
 def simulate_balancing(
@@ -20,7 +22,8 @@ def simulate_balancing(
         num_transfers: int,
         transfer_value: int,
         routing_model: RoutingModel,
-        name: str
+        name: str,
+        execute_transfers=True
 ):
     """
     Simulates network transfers under the given fee model and plots some statistics.
@@ -42,7 +45,7 @@ def simulate_balancing(
 
     # Simulation.
     failed, avg_length, avg_contacted = simulate_transfers(
-        cn, num_transfers, transfer_value, routing_model
+        cn, num_transfers, transfer_value, routing_model, execute_transfers
     )
 
     # Post-simulation evaluation.
@@ -79,14 +82,14 @@ def simulate_balancing(
 
     # Stats plot (labels only).
     labels = [
+        'Simulation name: {}'.format(name),
+        'Top row: initial network state',
+        'Bottom row: after {} transfers'.format(num_transfers),
+        '',
         'Nodes: {}'.format(len(cn.nodes)),
         'Channels: {}'.format(num_channels_uni // 2),
         'Transfers: {}'.format(num_transfers),
         '',
-        'Top row: initial network state',
-        'Bottom row: after {} transfers'.format(num_transfers),
-        '',
-        'Simulation name: {}'.format(name),
         'Failed transfers: {}'.format(len(failed)),
         'Average transfer hops: {:.2f}'.format(avg_length),
         'Average nodes contacted: {:.2f}'.format(avg_contacted),
@@ -113,18 +116,24 @@ def simulate_balancing(
     axs[2][2].axis('off')
     axs[2][3].axis('off')
 
-    os.makedirs(out_dir, exist_ok=True)
-    filename = 'balancing_{}_{}_{}.png'.format(
+    dirpath = os.path.join(out_dir, 'balancing_{}_{}_{}'.format(
         config.num_nodes, num_transfers, name
-    )
-    fig.savefig(os.path.join(out_dir, filename), bbox_inches='tight')
+    ))
+    shutil.rmtree(dirpath, ignore_errors=True)
+    os.makedirs(dirpath, exist_ok=True)
+
+    fig.savefig(os.path.join(dirpath, 'stats'), bbox_inches='tight')
+    draw2d(cn, filepath=os.path.join(dirpath, 'network'))
+    draw2d(cn, heatmap_attr='num_transfers', filepath=os.path.join(dirpath, 'heatmap_transfers'))
+    draw2d(cn, heatmap_attr='net_balance', filepath=os.path.join(dirpath, 'heatmap_balance'))
 
 
 def simulate_transfers(
         cn: ChannelNetwork,
         num_transfers: int,
         value: int,
-        routing_model: RoutingModel
+        routing_model: RoutingModel,
+        execute_transfers: bool
 ) -> (List[int], float, float):
     """
     Perform transfers between random nodes.
@@ -158,7 +167,8 @@ def simulate_transfers(
             ))
             failed.append(i)
         else:
-            cn.do_transfer(path, value)
+            if execute_transfers:
+                cn.do_transfer(path, value)
             sum_path_lengths += len(path)
             sum_contacted += len({node for subpath in path_history for node in subpath})
 

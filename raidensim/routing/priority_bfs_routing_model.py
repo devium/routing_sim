@@ -9,7 +9,7 @@ from raidensim.routing.routing_model import RoutingModel
 from raidensim.types import Path
 
 
-class PriorityBFSRoutingModel(RoutingModel):
+class PriorityRoutingModel(RoutingModel):
     def __init__(
             self,
             priority_model: Callable[[ChannelNetwork, Node, Node, Node, Node, int], float],
@@ -55,22 +55,22 @@ class PriorityBFSRoutingModel(RoutingModel):
         # Node unreachable, likely due to fragmented network or degraded channels.
         return [], path_history
 
-    @staticmethod
-    def distance_priority(
-            cn, source: 'Node', current: 'Node', next_: 'Node', target: 'Node', value: int
-    ) -> float:
-        """
-        Normalized distance between new node and target node.
-        distance == 0 => same node
-        distance == 1 => 180 degrees
-        """
-        return cn.ring_distance(next_, target) / cn.MAX_ID * 2
 
-    @staticmethod
-    def distance_fee_priority(
-            cn, source: 'Node', current: 'Node', next_: 'Node', target: 'Node', value: int
-    ) -> float:
-        distance = cn.ring_distance(next_, target) / cn.MAX_ID * 2
-        attrs = current.cn.edges[current, next_]
-        fee = 1 / (1 + math.exp(-(attrs['net_balance'] + value)))
-        return distance * fee
+def distance_priority(
+        cn, source: 'Node', current: 'Node', next_: 'Node', target: 'Node', value: int
+) -> float:
+    """
+    Normalized distance between new node and target node.
+    distance == 0 => same node
+    distance == 1 => 180 degrees
+    """
+    return cn.ring_distance(next_, target) / cn.MAX_ID * 2
+
+
+def distance_net_balance_priority(
+        cn, source: 'Node', current: 'Node', next_: 'Node', target: 'Node', value: int
+) -> float:
+    distance = cn.ring_distance(next_, target) / cn.MAX_ID * 2
+    attrs = current.cn.edges[current, next_]
+    fee = 1 / (1 + math.exp(-(attrs['net_balance'] + value)))
+    return distance * fee

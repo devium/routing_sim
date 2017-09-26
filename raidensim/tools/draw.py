@@ -80,6 +80,7 @@ def draw2d(
         highlighted_nodes: List[List[Node]] = None,
         helper_highlight: PathFindingHelper=None,
         draw_labels: bool=False,
+        heatmap_attr: str=None,
         filepath: str=None
 ):
     from matplotlib.patches import Wedge
@@ -92,7 +93,7 @@ def draw2d(
 
     plt.clf()
     fig = plt.gcf()
-    fig.set_size_inches(8, 8)
+    fig.set_size_inches(12, 12)
     ax = fig.add_subplot(111)
     ax.axis('off')
 
@@ -110,9 +111,24 @@ def draw2d(
         alpha = 0.6 if helper == helper_highlight else 0.2
         ax.add_artist(Wedge((0, 0), radius, sangle, eangle, color=color, alpha=alpha))
 
-    nx.draw_networkx(
-        cn, pos, edge_color=edge_color, node_size=1, with_labels=False, ax=ax, arrows=False
-    )
+    if heatmap_attr:
+        heatmap_values = [abs(cn[a][b][heatmap_attr]) for a, b in cn.edges]
+        max_ = max(heatmap_values)
+        colors = [x / max_ * 100 for x in heatmap_values]
+        nx.draw_networkx(
+            cn,
+            pos,
+            edge_color=colors,
+            edge_cmap=plt.cm.inferno,
+            node_size=1,
+            with_labels=False,
+            ax=ax,
+            arrows=False
+        )
+    else:
+        nx.draw_networkx(
+            cn, pos, edge_color=edge_color, node_size=1, with_labels=False, ax=ax, arrows=False
+        )
     if path:
         nx.draw_networkx_edges(cn, pos, edgelist=path_to_edges(path), edge_color='r', arrows=False)
 

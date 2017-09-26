@@ -23,16 +23,16 @@ class GlobalRoutingModel(RoutingModel):
         except nx.NetworkXNoPath:
             return [], []
 
-    @staticmethod
-    def fee_model_constant(a: Node, b: Node, attrs: dict, value: int) -> float:
-        return 1
 
-    @staticmethod
-    def fee_model_net_balance(a: Node, b: Node, attrs: dict, value: int) -> float:
-        # Sigmoid function.
-        return 1 / (1 + math.exp(-(attrs['net_balance'] + value)))
+def constant_fee_model(a: Node, b: Node, attrs: dict, value: int) -> float:
+    return 1
 
-    @staticmethod
-    def fee_model_imbalance(a: Node, b: Node, attrs: dict, value: int) -> float:
-        # Sigmoid function.
-        return 1 / (1 + math.exp(-(attrs['imbalance'] + 2 * value)))
+
+def net_balance_fee_model(a: Node, b: Node, attrs: dict, value: int) -> float:
+    # Sigmoid function.
+    return 1 / (1 + math.exp(-(attrs['net_balance'] + value)))
+
+
+def imbalance_fee_model(a: Node, b: Node, attrs: dict, value: int) -> float:
+    # Sigmoid function.
+    return 1 / (1 + math.exp(-(attrs['imbalance'] + 2 * value)))

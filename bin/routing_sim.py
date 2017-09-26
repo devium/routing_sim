@@ -1,43 +1,3 @@
-#!/usr/bin/env python
-
-"""
-Network Backbone:
-
-- Nodes connnect in a Kademlia style fashion but not strictly
-- Light clients connect to full nodes
-
-Tests:
-- Test nodes doing a recursive path lookup
-- Test nodes maintaining a view on the capacity up to n hops distance
-- Test global path finding helper
-- Count number of messages
-- Count success rate
-- Compare path length
-
-Implement:
-- Creation of the Network + storage/load of it
-- power distribution of capacity
-- flexible framework to simulate
-
-Todo:
-* variation of channel deposits
-* preference for channel partners with similar deposits
-* add light clients
-* visualize deposits, light clients
-* variation of capacities
-* imprecise kademlia for sybill attacks prevention and growth of network
-* locally cached neighbourhood capacity
-* simulate availabiliy of nodes
-* stats on global and recursive path finding
-
-* calc the number of messages sent for global, locally cached and recursive routing
-* 3d visualization of the network (z-axis being the deposits)
-
-
-Interactive:
-* rebalancing fees, fee based routing
-
-"""
 import os
 
 from raidensim.network.config import NetworkConfiguration
@@ -47,8 +7,17 @@ from raidensim.network.dist import (
     MicroRaidenDistribution,
     CircleDistribution
 )
-from raidensim.routing.global_routing_model import GlobalRoutingModel
-from raidensim.routing.priority_bfs_routing_model import PriorityBFSRoutingModel
+from raidensim.routing.global_routing_model import (
+    GlobalRoutingModel,
+    imbalance_fee_model,
+    net_balance_fee_model,
+    constant_fee_model
+)
+from raidensim.routing.priority_bfs_routing_model import (
+    PriorityRoutingModel,
+    distance_net_balance_priority,
+    distance_priority
+)
 from raidensim.simulation import simulate_routing, simulate_balancing
 
 from raidensim.strategy.network_strategies import RaidenNetworkStrategy, MicroRaidenNetworkStrategy
@@ -58,7 +27,7 @@ OUT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, '../out'))
 
 
 NETWORK_CONFIG_RAIDEN_NETWORK = NetworkConfiguration(
-    num_nodes=1000,
+    num_nodes=500,
     # fullness_dist=CircleDistribution(),
     # fullness_dist=ParetoDistribution(5, 0, 1),
     fullness_dist=BetaDistribution(0.5, 2),
@@ -91,57 +60,34 @@ def run():
     # config = NETWORK_CONFIG_MICRORAIDEN
 
     # Routing models.
-    constant_routing = GlobalRoutingModel(GlobalRoutingModel.fee_model_constant)
-    net_balance_routing = GlobalRoutingModel(GlobalRoutingModel.fee_model_net_balance)
-    imbalance_routing = GlobalRoutingModel(GlobalRoutingModel.fee_model_imbalance)
-    bfs_routing = PriorityBFSRoutingModel(PriorityBFSRoutingModel.distance_priority)
-    bfs_fee_routing = PriorityBFSRoutingModel(PriorityBFSRoutingModel.distance_fee_priority)
+    constant_global_routing = GlobalRoutingModel(constant_fee_model)
+    net_balance_global_routing = GlobalRoutingModel(net_balance_fee_model)
+    imbalance_global_routing = GlobalRoutingModel(imbalance_fee_model)
+    distance_priority_routing = PriorityRoutingModel(distance_priority)
+    distance_net_balance_priority_routing = PriorityRoutingModel(distance_net_balance_priority)
 
+    # Routing simulation + animation.
     routing_models = [
-        constant_routing,
-        bfs_routing
+        constant_global_routing,
+        distance_net_balance_priority_routing
     ]
-    # simulate_routing(config, OUT_DIR, num_paths=1, value=1, routing_models=routing_models)
-    # simulate_balancing(
-    #     config,
-    #     OUT_DIR,
-    #     num_transfers=5000,
-    #     transfer_value=1,
-    #     routing_model=constant_routing,
-    #     name='global-constant'
-    # )
-    simulate_balancing(
-        config,
-        OUT_DIR,
-        num_transfers=5000,
-        transfer_value=1,
-        routing_model=net_balance_routing,
-        name='global-net-balance'
-    )
-    simulate_balancing(
-        config,
-        OUT_DIR,
-        num_transfers=5000,
-        transfer_value=1,
-        routing_model=bfs_routing,
-        name='bfs-distance'
-    )
-    simulate_balancing(
-        config,
-        OUT_DIR,
-        num_transfers=5000,
-        transfer_value=1,
-        routing_model=bfs_fee_routing,
-        name='bfs-net-balance'
-    )
-    # simulate_balancing(
-    #     config,
-    #     OUT_DIR,
-    #     num_transfers=5000,
-    #     transfer_value=1,
-    #     routing_model=imbalance_routing,
-    #     name='global-imbalance'
-    # )
+    simulate_routing(config, OUT_DIR, num_paths=3, value=1, routing_models=routing_models)
+
+    # Network scale simulation.
+    routing_models = [
+        ('priority_distance', distance_priority_routing),
+        ('priority_net_balance', distance_net_balance_priority_routing)
+    ]
+    for name, routing_model in routing_models:
+        simulate_balancing(
+            config,
+            OUT_DIR,
+            num_transfers=1000,
+            transfer_value=1,
+            routing_model=routing_model,
+            name=name,
+            execute_transfers=True
+        )
 
 
 if __name__ == '__main__':

@@ -60,13 +60,13 @@ class Node(object):
         return self.cn.ring_distance(self, other)
 
     def setup_channel(self, other: 'Node', deposit: int) -> None:
-        self.cn.add_edge(
-            self,
-            other,
-            deposit=deposit,
-            balance=0,
-            capacity=deposit
-        )
+        attrs = {
+            'deposit': deposit,
+            'balance': 0,
+            'capacity': deposit,
+            'num_transfers': 0
+        }
+        self.cn.add_edge(self, other, **attrs)
         self.cn.update_channel_cache(self, other)
 
     def close_channel(self, other: 'Node') -> None:
