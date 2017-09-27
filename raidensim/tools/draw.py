@@ -7,7 +7,6 @@ from matplotlib import pyplot as plt
 
 from raidensim.network.channel_network import ChannelNetwork
 from raidensim.network.node import Node
-from raidensim.network.path_finding_helper import PathFindingHelper
 
 
 def calc_positions(nodes, max_id, min_fullness, max_fullness):
@@ -78,7 +77,7 @@ def draw2d(
         cn: ChannelNetwork,
         path: List[Node] = None,
         highlighted_nodes: List[List[Node]] = None,
-        helper_highlight: PathFindingHelper=None,
+        helper_highlight=None,
         draw_labels: bool=False,
         heatmap_attr: str=None,
         filepath: str=None

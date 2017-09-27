@@ -9,7 +9,8 @@ from raidensim.network.dist import (
     BetaDistribution,
     MicroRaidenDistribution
 )
-from raidensim.routing.priority_bfs_routing_model import PriorityRoutingModel, distance_priority
+from raidensim.routing.priority_models import DistancePriorityModel
+from raidensim.routing.priority_routing_model import PriorityRoutingModel
 from raidensim.strategy.network_strategies import RaidenNetworkStrategy, MicroRaidenNetworkStrategy
 
 NETWORK_CONFIG_RAIDEN_NETWORK = NetworkConfiguration(
@@ -43,7 +44,7 @@ OUT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, '../blender/data'))
 ANIMATION_CONFIG = AnimationConfiguration(
     out_dir=OUT_DIR,
     network=NETWORK_CONFIG_RAIDEN_NETWORK,
-    routing_model=PriorityRoutingModel(distance_priority),
+    routing_model=PriorityRoutingModel(DistancePriorityModel()),
     popup_channels=False,
     animation_length=5,
     transfer_hop_delay=0.08,

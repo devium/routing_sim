@@ -13,11 +13,11 @@ from raidensim.routing.global_routing_model import (
     net_balance_fee_model,
     constant_fee_model
 )
-from raidensim.routing.priority_bfs_routing_model import (
-    PriorityRoutingModel,
-    distance_net_balance_priority,
-    distance_priority
-)
+from raidensim.routing.next_hop_routing_model import NextHopRoutingModel
+from raidensim.routing.priority_models import (
+    DistancePriorityModel,
+    DistanceNetBalancePriorityModel,
+    GloballyAssistedPriorityModel)
 from raidensim.simulation import simulate_routing, simulate_balancing
 
 from raidensim.strategy.network_strategies import RaidenNetworkStrategy, MicroRaidenNetworkStrategy
@@ -63,20 +63,23 @@ def run():
     constant_global_routing = GlobalRoutingModel(constant_fee_model)
     net_balance_global_routing = GlobalRoutingModel(net_balance_fee_model)
     imbalance_global_routing = GlobalRoutingModel(imbalance_fee_model)
-    distance_priority_routing = PriorityRoutingModel(distance_priority)
-    distance_net_balance_priority_routing = PriorityRoutingModel(distance_net_balance_priority)
+    distance_next_hop_routing = NextHopRoutingModel(DistancePriorityModel())
+    distance_net_balance_next_hop_routing = NextHopRoutingModel(DistanceNetBalancePriorityModel())
+    assisted_next_hop_routing = NextHopRoutingModel(GloballyAssistedPriorityModel())
 
     # Routing simulation + animation.
     routing_models = [
         constant_global_routing,
-        distance_net_balance_priority_routing
+        distance_net_balance_next_hop_routing,
+        assisted_next_hop_routing
     ]
-    simulate_routing(config, OUT_DIR, num_paths=3, value=1, routing_models=routing_models)
+    simulate_routing(config, OUT_DIR, num_paths=1, value=1, routing_models=routing_models)
 
     # Network scale simulation.
     routing_models = [
-        # ('priority_distance', distance_priority_routing),
-        ('priority_net_balance', distance_net_balance_priority_routing)
+        # ('next_hop_distance', distance_priority_routing),
+        ('next_hop_net_balance', distance_net_balance_next_hop_routing),
+        ('next_hop_globally_assisted', assisted_next_hop_routing)
     ]
     for name, routing_model in routing_models:
         simulate_balancing(

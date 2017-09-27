@@ -1,5 +1,5 @@
 import random
-from typing import Callable, List, Union
+from typing import Union
 
 import networkx as nx
 import time
@@ -7,7 +7,6 @@ import time
 from raidensim.types import Path
 from .config import NetworkConfiguration
 from raidensim.network.node import Node
-from raidensim.network.path_finding_helper import PathFindingHelper
 
 
 class ChannelNetwork(nx.DiGraph):
@@ -18,7 +17,6 @@ class ChannelNetwork(nx.DiGraph):
         self.config = config
         self.helpers = []
         self.generate_nodes()
-        # cn.generate_helpers(config)
         self.connect_nodes()
 
     def generate_nodes(self):
@@ -26,14 +24,6 @@ class ChannelNetwork(nx.DiGraph):
             uid = random.randrange(self.MAX_ID)
             fullness = self.config.fullness_dist.random()
             self.add_node(Node(self, uid, fullness))
-
-    def generate_helpers(self, config: NetworkConfiguration):
-        for i in range(config.ph_num_helpers):
-            center = random.randrange(self.MAX_ID)
-            min_range = int(config.ph_min_range_fr * self.MAX_ID)
-            max_range = int(config.ph_max_range_fr * self.MAX_ID)
-            range_ = random.randrange(min_range, max_range)
-            self.helpers.append(PathFindingHelper(self, range_, center))
 
     def connect_nodes(self):
         print('Connecting nodes.')
@@ -51,39 +41,41 @@ class ChannelNetwork(nx.DiGraph):
             print('Removing disconnected nodes: {}'.format(disconnected_nodes))
             self.remove_nodes_from(disconnected_nodes)
 
-    def update_channel_cache(self, a: Node, b: Node):
-        ab = self.edges.get((a, b))
-        ba = self.edges.get((b, a))
-        if ab is not None and ba is not None:
-            net_balance = ab['balance'] - ba['balance']
-            ab['net_balance'] = net_balance
-            ba['net_balance'] = -net_balance
-            deposit_a = ab['deposit']
-            deposit_b = ba['deposit']
-            ab['capacity'] = deposit_a - net_balance
-            ba['capacity'] = deposit_b + net_balance
+    def update_channel_cache(self, u: Node, v: Node, uv: dict=None, vu: dict=None):
+        if uv is None:
+            uv = self[u].get(v)
+        if vu is None:
+            vu = self[v].get(u)
+        if uv is not None and vu is not None:
+            net_balance = uv['balance'] - vu['balance']
+            uv['net_balance'] = net_balance
+            vu['net_balance'] = -net_balance
+            deposit_a = uv['deposit']
+            deposit_b = vu['deposit']
+            uv['capacity'] = deposit_a - net_balance
+            vu['capacity'] = deposit_b + net_balance
             imbalance = deposit_b - deposit_a + 2 * net_balance
-            ab['imbalance'] = imbalance
-            ba['imbalance'] = -imbalance
+            uv['imbalance'] = imbalance
+            vu['imbalance'] = -imbalance
 
-    def ring_distance(self, a: Union[int, Node], b: Union[int, Node]):
-        if isinstance(a, int):
-            return min((a - b) % self.MAX_ID, (b - a) % self.MAX_ID)
-        elif isinstance(a, Node):
-            return self.ring_distance(a.uid, b.uid)
+    def ring_distance(self, u: Union[int, Node], v: Union[int, Node]):
+        if isinstance(u, int):
+            return min((u - v) % self.MAX_ID, (v - u) % self.MAX_ID)
+        elif isinstance(u, Node):
+            return self.ring_distance(u.uid, v.uid)
         else:
             raise TypeError('Unsupported type.')
 
     def do_transfer(self, path: Path, value: int):
         for i in range(len(path) - 1):
-            a = path[i]
-            b = path[i + 1]
-            if a.get_capacity(b) < value:
-                print('Warning: Transfer ({} -> {}: {}) exceeds capacity.'.format(a, b, value))
-            ab = self[a][b]
-            ba = self[b][a]
-            ab['balance'] += value
-            ab['num_transfers'] += 1
-            ba['num_transfers'] += 1
+            u = path[i]
+            v = path[i + 1]
+            if u.get_capacity(v) < value:
+                print('Warning: Transfer ({} -> {}: {}) exceeds capacity.'.format(u, v, value))
+            uv = self[u][v]
+            vu = self[v][u]
+            uv['balance'] += value
+            uv['num_transfers'] += 1
+            vu['num_transfers'] += 1
             # Update redundant/cached values for faster Dijkstra routing.
-            self.update_channel_cache(a, b)
+            self.update_channel_cache(u, v, uv, vu)
