@@ -14,6 +14,8 @@ from raidensim.network.channel_network import ChannelNetwork
 from raidensim.network.config import NetworkConfiguration
 from raidensim.routing.routing_model import RoutingModel
 from raidensim.tools import draw2d
+from raidensim.types import Path
+from raidensim.util import sigmoid
 
 
 def simulate_balancing(
@@ -44,7 +46,7 @@ def simulate_balancing(
     pre_imbalance_stdev = math.sqrt(sum(x**2 for x in pre_imbalances) / len(pre_imbalances))
 
     # Simulation.
-    failed, avg_length, avg_contacted = simulate_transfers(
+    failed, avg_length, avg_contacted, avg_fee = simulate_transfers(
         cn, num_transfers, transfer_value, routing_model, execute_transfers
     )
 
@@ -93,6 +95,7 @@ def simulate_balancing(
         'Failed transfers: {}'.format(len(failed)),
         'Average transfer hops: {:.2f}'.format(avg_length),
         'Average nodes contacted: {:.2f}'.format(avg_contacted),
+        'Average fee (net balance): {:.2f}'.format(avg_fee),
         'Balance SD before: {:.2f}'.format(pre_net_balance_stdev),
         'Balance SD after: {:.2f}'.format(post_net_balance_stdev),
         'Imbalance SD before: {:.2f}'.format(pre_imbalance_stdev),
@@ -134,7 +137,7 @@ def simulate_transfers(
         value: int,
         routing_model: RoutingModel,
         execute_transfers: bool
-) -> (List[int], float, float):
+) -> (List[int], float, float, float):
     """
     Perform transfers between random nodes.
     """
@@ -146,6 +149,7 @@ def simulate_transfers(
     failed = []
     sum_path_lengths = 0
     sum_contacted = 0
+    sum_fees = 0
     tic = time.time()
     subtic = tic
     for i in range(num_transfers):
@@ -167,6 +171,7 @@ def simulate_transfers(
             ))
             failed.append(i)
         else:
+            sum_fees += get_net_balance_fee(cn, path, value)
             if execute_transfers:
                 cn.do_transfer(path, value)
             sum_path_lengths += len(path)
@@ -176,7 +181,17 @@ def simulate_transfers(
     num_failed = len(failed)
     num_success = num_transfers - num_failed
     print('Finished after {} seconds. {} transfers failed.'.format(toc - tic, num_failed))
-    return failed, sum_path_lengths/num_success, sum_contacted/num_success
+    return failed, sum_path_lengths/num_success, sum_contacted/num_success, sum_fees/num_success
+
+
+def get_net_balance_fee(cn: ChannelNetwork, path: Path, value: int) -> float:
+    fee = 0
+    for i in range(len(path) - 1):
+        u = path[i]
+        v = path[i + 1]
+        e = cn[u][v]
+        fee += sigmoid(e['net_balance'] + value)
+    return fee
 
 
 def get_channel_counts(cn: ChannelNetwork) -> List[int]:
