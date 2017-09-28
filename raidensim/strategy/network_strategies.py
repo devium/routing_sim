@@ -6,18 +6,21 @@ from raidensim.strategy.filter_strategies import (
     DistanceFilterStrategy,
     FullerFilterStrategy,
     MinIncomingDepositFilterStrategy,
-    MicroRaidenServerFilterStrategy, NotConnectedFilterStrategy, AcceptedLimitsFilterStrategy)
+    MicroRaidenServerFilterStrategy,
+    NotConnectedFilterStrategy,
+    AcceptedLimitsFilterStrategy
+)
 from raidensim.strategy.selection_strategies import KademliaSelectionStrategy, \
     RandomSelectionStrategy
 from raidensim.strategy.strategy import NetworkStrategy
-from raidensim.types import Fullness, Range
+from raidensim.types import Fullness, IntRange
 
 
 class SimpleNetworkStrategy(NetworkStrategy):
     def __init__(
             self,
-            max_initiated_channels: Range,
-            deposit: Range
+            max_initiated_channels: IntRange,
+            deposit: IntRange
     ):
         def initiated_channels_mapping(fullness: Fullness):
             return self._linear(*max_initiated_channels, fullness)
@@ -48,19 +51,19 @@ class RaidenNetworkStrategy(NetworkStrategy):
             min_incoming_deposit: float,
             max_network_distance: float,
             kademlia_targets_per_cycle: float,
-            max_initiated_channels: Range,
-            max_accepted_channels: Range,
-            deposit: Range
+            max_initiated_channels: IntRange,
+            max_accepted_channels: IntRange,
+            deposit: IntRange
 
     ):
         def initiated_channels_mapping(fullness: Fullness):
-            return self._linear(*max_initiated_channels, fullness)
+            return self._linear_int(*max_initiated_channels, fullness)
 
         def accepted_channels_mapping(fullness: Fullness):
-            return self._linear(*max_accepted_channels, fullness)
+            return self._linear_int(*max_accepted_channels, fullness)
 
         def deposit_mapping(fullness: Fullness):
-            return self._linear(*deposit, fullness)
+            return self._linear_int(*deposit, fullness)
 
         filter_strategies = [
             IdentityFilterStrategy(),
@@ -85,14 +88,18 @@ class RaidenNetworkStrategy(NetworkStrategy):
         )
 
     @staticmethod
-    def _linear(min_: int, max_: int, fullness: float):
+    def _linear_int(min_: int, max_: int, fullness: float) -> int:
         return int((max_ - min_) * fullness + min_)
+
+    @staticmethod
+    def _linear_float(min_: float, max_: float, fullness: float) -> float:
+        return (max_ - min_) * fullness + min_
 
 
 class MicroRaidenNetworkStrategy(NetworkStrategy):
     def __init__(
             self,
-            max_initiated_channels: Range,
+            max_initiated_channels: IntRange,
             deposit: int
     ):
         def initiated_channels_mapping(fullness: Fullness):

@@ -4,5 +4,6 @@ from raidensim.network.node import Node
 
 Fullness = float
 Reason = str
-Range = Tuple[int, int]
+IntRange = Tuple[int, int]
+FloatRange = Tuple[float, float]
 Path = List[Node]

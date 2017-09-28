@@ -17,7 +17,8 @@ def simulate_routing(
         out_dir: str,
         num_paths: int,
         value: int,
-        routing_models: List[RoutingModel]
+        routing_models: List[RoutingModel],
+        max_gif_frames=20
 ):
     # Setup network.
     config.fullness_dist.reset()
@@ -66,25 +67,30 @@ def simulate_routing(
                 # Plot path evolution.
                 gif_filenames = []
                 visited = {source}
-                for isp, subpath in enumerate(path_history):
-                    visited |= set(subpath)
-                    filename = 'step_{:04d}.png'.format(isp)
-                    gif_filenames.append(filename)
-                    draw2d(
-                        cn, subpath, [visited, [source, target]],
-                        filepath=os.path.join(dirpath, filename)
-                    )
                 num_wrong_turns = 0
                 for isp in range(len(path_history) - 1):
                     prev = path_history[isp]
                     curr = path_history[isp + 1]
                     if prev != curr[:-1]:
                         num_wrong_turns += 1
+                    visited |= set(prev)
 
                 print('Took {} wrong turn(s).'.format(num_wrong_turns))
                 print('Contacted {} distinct nodes in the process: {}'.format(
                     len(visited), visited)
                 )
+
+                visited = {source}
+                for isp, subpath in enumerate(path_history):
+                    visited |= set(subpath)
+                    if isp > max_gif_frames - 1:
+                        break
+                    filename = 'step_{:04d}.png'.format(isp)
+                    gif_filenames.append(filename)
+                    draw2d(
+                        cn, subpath, [visited, [source, target]],
+                        filepath=os.path.join(dirpath, filename)
+                    )
 
                 filename = 'animation.gif'
                 with imageio.get_writer(

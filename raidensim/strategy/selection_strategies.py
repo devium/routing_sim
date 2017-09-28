@@ -9,7 +9,38 @@ from raidensim.network.node import Node
 from raidensim.strategy.strategy import SelectionStrategy, NodeConnectionData
 
 
-class KademliaSelectionStrategy(SelectionStrategy):
+class CachedNetworkSelectionStrategy(SelectionStrategy):
+    """
+    Maintains a sorted cache of all node IDs and a mapping from node ID to Node.
+    """
+    def __init__(self, **kwargs):
+        SelectionStrategy.__init__(self, **kwargs)
+
+        # Cached network information.
+        self.cached_cn = None
+        self.nodes = []
+        self.node_ids_sorted = []
+        self.node_id_to_node = {}
+
+    def _update_network_cache(self, cn: ChannelNetwork):
+        # Best guess on an up-to-date cache. Not an issue with constant-node networks.
+        if len(self.nodes) == len(cn.nodes) and self.cached_cn == cn:
+            return
+
+        # Nodes shuffled for easy random sampling.
+        self.nodes = list(cn.nodes)
+        random.shuffle(self.nodes)
+        self.node_id_to_node = {node.uid: node for node in cn.nodes}
+        self.node_ids_sorted = sorted(node.uid for node in cn.nodes)
+        self.cached_cn = cn
+
+    def targets(
+            self, node: NodeConnectionData, node_to_connection_data: Dict[Node, Dict[str, Any]]
+    ) -> Iterable[NodeConnectionData]:
+        raise NotImplementedError
+
+
+class KademliaSelectionStrategy(CachedNetworkSelectionStrategy):
     """
     Connects nodes with closer nodes first, increasing the target distance exponentially for each
     new target.
@@ -25,14 +56,9 @@ class KademliaSelectionStrategy(SelectionStrategy):
     more distant nodes.
     """
     def __init__(self, max_network_distance, targets_per_cycle, **kwargs):
-        SelectionStrategy.__init__(self, **kwargs)
+        CachedNetworkSelectionStrategy.__init__(self, **kwargs)
         self.max_network_distance = max_network_distance
         self.targets_per_cycle=targets_per_cycle
-
-        # Cached network information.
-        self.cached_cn = None
-        self.node_ids_sorted = []
-        self.node_id_to_node = {}
 
     def _distances(self, max_distance: float) -> Iterable[int]:
         i = 0
@@ -41,15 +67,6 @@ class KademliaSelectionStrategy(SelectionStrategy):
         while True:
             yield distance_base ** i
             i = (i + 1) % self.targets_per_cycle
-
-    def _update_network_cache(self, cn: ChannelNetwork):
-        # Best guess on an up-to-date cache. Not an issue with constant-node networks.
-        if len(self.node_ids_sorted) == len(cn.nodes) and self.cached_cn == cn:
-            return
-
-        self.node_id_to_node = {node.uid: node for node in cn.nodes}
-        self.node_ids_sorted = sorted(node.uid for node in cn.nodes)
-        self.cached_cn = cn
 
     def targets(
             self, node: NodeConnectionData, node_to_connection_data: Dict[Node, Dict[str, Any]]
@@ -102,15 +119,15 @@ class KademliaSelectionStrategy(SelectionStrategy):
             yield target, target_data
 
 
-class RandomSelectionStrategy(SelectionStrategy):
+class RandomSelectionStrategy(CachedNetworkSelectionStrategy):
     def targets(
             self, node: NodeConnectionData, node_to_connection_data: Dict[Node, Dict[str, Any]]
     ) -> Iterable[NodeConnectionData]:
-        filtered_nodes = {
-            other for other in node[0].cn.nodes
-            if self.match(node, (other, node_to_connection_data[other]))
-        }
-        while filtered_nodes:
-            other = random.sample(filtered_nodes, 1)[0]
-            filtered_nodes.remove(other)
-            yield (other, node_to_connection_data[other])
+        self._update_network_cache(node[0].cn)
+        i = 0
+        while i < len(self.nodes):
+            other = self.nodes[i]
+            other_data = node_to_connection_data[other]
+            if self.match(node, (other, other_data)):
+                yield (other, other_data)
+            i += 1

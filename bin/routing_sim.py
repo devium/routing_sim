@@ -32,11 +32,11 @@ NETWORK_CONFIG_RAIDEN_NETWORK = NetworkConfiguration(
     # fullness_dist=ParetoDistribution(5, 0, 1),
     fullness_dist=BetaDistribution(0.5, 2),
     network_strategy=RaidenNetworkStrategy(
-        min_incoming_deposit=0.2,
+        min_incoming_deposit=0.0,
         max_network_distance=1/8,
         kademlia_targets_per_cycle=8,
-        max_initiated_channels=(4, 10),
-        max_accepted_channels=(10, 20),
+        max_initiated_channels=(1, 10),
+        max_accepted_channels=(2, 10),
         deposit=(4, 100)
     )
 )
@@ -70,10 +70,11 @@ def run():
     # Routing simulation + animation.
     routing_models = [
         # constant_global_routing,
-        distance_net_balance_next_hop_routing,
+        distance_next_hop_routing,
+        # distance_net_balance_next_hop_routing,
         # assisted_next_hop_routing
     ]
-    simulate_routing(config, OUT_DIR, num_paths=3, value=1, routing_models=routing_models)
+    simulate_routing(config, OUT_DIR, num_paths=5, value=1, routing_models=routing_models)
 
     # Network scaling simulation.
     routing_models = [
@@ -81,16 +82,16 @@ def run():
         ('next_hop_net_balance', distance_net_balance_next_hop_routing),
         # ('next_hop_globally_assisted', assisted_next_hop_routing)
     ]
-    for name, routing_model in routing_models:
-        simulate_balancing(
-            config,
-            OUT_DIR,
-            num_transfers=10000,
-            transfer_value=1,
-            routing_model=routing_model,
-            name=name,
-            execute_transfers=True
-        )
+    # for name, routing_model in routing_models:
+    #     simulate_balancing(
+    #         config,
+    #         OUT_DIR,
+    #         num_transfers=10000,
+    #         transfer_value=1,
+    #         routing_model=routing_model,
+    #         name=name,
+    #         execute_transfers=True
+    #     )
 
 
 if __name__ == '__main__':
