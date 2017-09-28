@@ -8,7 +8,9 @@ class DistancePriorityModel(PriorityModel):
     """
     Prioritizes hops according to their (normalized) distance to the target node.
     """
-    def priority(self, cn, source: Node, u: Node, v: Node, target: Node, value: int) -> float:
+    def priority(
+            self, cn, source: Node, u: Node, v: Node, e: dict, target: Node, value: int
+    ) -> float:
         """
         Normalized distance between new node and target node.
         distance == 0 => same node
@@ -22,9 +24,10 @@ class DistanceNetBalancePriorityModel(PriorityModel):
     Prioritizes hops equally according to their distance to the target node and their channel net
     balance. A high net balance causes higher fees due to the added imbalance.
     """
-    def priority(self, cn, source: Node, u: Node, v: Node, target: Node, value: int) -> float:
+    def priority(
+            self, cn, source: Node, u: Node, v: Node, e: dict, target: Node, value: int
+    ) -> float:
         distance = cn.ring_distance(v, target) / cn.MAX_ID * 2
-        e = u.cn[u][v]
         fee = sigmoid(e['net_balance'] + value)
         return distance * fee
 
@@ -45,10 +48,11 @@ class GloballyAssistedPriorityModel(PriorityModel):
         # Nested next-hop routing based on global information. Used with transfer value 0.
         self.global_routing = NextHopRoutingModel(DistancePriorityModel())
 
-    def priority(self, cn, source: Node, u: Node, v: Node, target: Node, value: int) -> float:
+    def priority(
+            self, cn, source: Node, u: Node, v: Node, e: dict, target: Node, value: int
+    ) -> float:
         path, _ = self.global_routing.route(v, target, 0)
         num_hops = len(path)
         distance = cn.ring_distance(v, target) / cn.MAX_ID * 2
-        e = u.cn[u][v]
         fee = sigmoid(e['net_balance'] + value)
         return distance * fee * num_hops

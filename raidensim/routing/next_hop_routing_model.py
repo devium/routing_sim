@@ -9,7 +9,14 @@ from raidensim.types import Path
 
 class PriorityModel(object):
     def priority(
-            self, cn: ChannelNetwork, source: Node, u: Node, v: Node, target: Node, value: int
+            self,
+            cn: ChannelNetwork,
+            source: Node,
+            u: Node,
+            v: Node,
+            e: dict,
+            target: Node,
+            value: int
     ) -> float:
         raise NotImplementedError
 
@@ -49,10 +56,12 @@ class NextHopRoutingModel(RoutingModel):
             if len(path_history) >= self.max_paths:
                 return [], path_history
 
-            for v in u.partners:
-                if v not in visited and u.get_capacity(v) >= value:
+            for v, e in u.partners.items():
+                if v not in visited and e['capacity'] >= value:
                     new_path = path + [v]
-                    priority = self.priority_model.priority(source.cn, source, u, v, target, value)
+                    priority = self.priority_model.priority(
+                        source.cn, source, u, v, e, target, value
+                    )
                     i += 1
                     queue_entry = (priority, len(new_path), i, new_path)
                     heapq.heappush(queue, queue_entry)

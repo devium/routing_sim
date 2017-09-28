@@ -34,7 +34,7 @@ NETWORK_CONFIG_RAIDEN_NETWORK = NetworkConfiguration(
     network_strategy=RaidenNetworkStrategy(
         min_incoming_deposit=0.2,
         max_network_distance=1/8,
-        kademlia_targets_per_cycle=4,
+        kademlia_targets_per_cycle=8,
         max_initiated_channels=(4, 10),
         max_accepted_channels=(10, 20),
         deposit=(4, 100)
@@ -69,17 +69,17 @@ def run():
 
     # Routing simulation + animation.
     routing_models = [
-        constant_global_routing,
+        # constant_global_routing,
         distance_net_balance_next_hop_routing,
-        assisted_next_hop_routing
+        # assisted_next_hop_routing
     ]
-    simulate_routing(config, OUT_DIR, num_paths=1, value=1, routing_models=routing_models)
+    simulate_routing(config, OUT_DIR, num_paths=3, value=1, routing_models=routing_models)
 
-    # Network scale simulation.
+    # Network scaling simulation.
     routing_models = [
         # ('next_hop_distance', distance_priority_routing),
         ('next_hop_net_balance', distance_net_balance_next_hop_routing),
-        ('next_hop_globally_assisted', assisted_next_hop_routing)
+        # ('next_hop_globally_assisted', assisted_next_hop_routing)
     ]
     for name, routing_model in routing_models:
         simulate_balancing(
