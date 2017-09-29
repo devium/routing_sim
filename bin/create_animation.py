@@ -2,6 +2,7 @@ import os
 
 from raidensim.animation.animation_generator import AnimationGenerator
 from raidensim.animation.config import AnimationConfiguration
+from raidensim.network.channel_network import ChannelNetwork
 from raidensim.network.config import NetworkConfiguration
 from raidensim.network.dist import (
     CircleDistribution,
@@ -19,9 +20,10 @@ NETWORK_CONFIG_RAIDEN_NETWORK = NetworkConfiguration(
     # fullness_dist=ParetoDistribution(5, 0, 1),
     # fullness_dist=BetaDistribution(0.5, 2),
     network_strategy=RaidenNetworkStrategy(
-        min_incoming_deposit=0.2,
-        max_network_distance=1/8,
-        kademlia_targets_per_cycle=8,
+        min_partner_deposit=0.2,
+        max_distance=int(1/4 * ChannelNetwork.MAX_ID),
+        kademlia_skip=22,
+        kademlia_tolerance=int(1/256 * ChannelNetwork.MAX_ID),
         max_initiated_channels=(4, 10),
         max_accepted_channels=(10, 20),
         deposit=(4, 100)

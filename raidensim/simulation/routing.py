@@ -7,6 +7,7 @@ import shutil
 import os
 
 from raidensim.routing.routing_model import RoutingModel
+from raidensim.strategy.filter_strategies import KademliaFilterStrategy
 from raidensim.tools import draw2d
 from raidensim.network.channel_network import ChannelNetwork
 from raidensim.network.config import NetworkConfiguration
@@ -15,6 +16,7 @@ from raidensim.network.config import NetworkConfiguration
 def simulate_routing(
         config: NetworkConfiguration,
         out_dir: str,
+        num_sample_nodes: int,
         num_paths: int,
         value: int,
         routing_models: List[RoutingModel],
@@ -31,8 +33,34 @@ def simulate_routing(
     os.makedirs(dirpath, exist_ok=True)
 
     # Plot baseline network.
+    print('Plotting network.')
     draw2d(cn, filepath=os.path.join(dirpath, 'network'))
     draw2d(cn, draw_labels=True, filepath=os.path.join(dirpath, 'network_labels'))
+
+    # Plot connectivity of a few random sample nodes.
+    if num_sample_nodes > 0:
+        print('Plotting sample node connectivity.')
+
+    try:
+        kademlia_filter = next(
+            filter_ for filter_ in config.network_strategy.selection_strategy.filter_strategies
+            if isinstance(filter_, KademliaFilterStrategy)
+        )
+    except StopIteration:
+        kademlia_filter = None
+
+    for i, node in enumerate(random.sample(cn.nodes, num_sample_nodes)):
+        channels = [[node, partner] for partner in node.partners]
+        if kademlia_filter:
+            draw2d(
+                cn,
+                channels,
+                kademlia_center=node.uid,
+                kademlia_buckets=kademlia_filter.buckets,
+                filepath=os.path.join(dirpath, 'node_{}'.format(i))
+            )
+        else:
+            draw2d(cn, channels, filepath=os.path.join(dirpath, 'node_{}'.format(i)))
 
     # Perform routing.
     # cn.nodes order is non-deterministic. Sort for reproducible sampling.
@@ -58,7 +86,7 @@ def simulate_routing(
                 print('Found path of length {}: {}'.format(len(path), path))
                 filename = 'path.png'
                 draw2d(
-                    cn, path, [path, [source, target]], filepath=os.path.join(dirpath, filename)
+                    cn, [path], [path, [source, target]], filepath=os.path.join(dirpath, filename)
                 )
             else:
                 print('No path found.')
@@ -88,7 +116,7 @@ def simulate_routing(
                     filename = 'step_{:04d}.png'.format(isp)
                     gif_filenames.append(filename)
                     draw2d(
-                        cn, subpath, [visited, [source, target]],
+                        cn, [subpath], [visited, [source, target]],
                         filepath=os.path.join(dirpath, filename)
                     )
 

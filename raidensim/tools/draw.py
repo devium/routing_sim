@@ -1,5 +1,6 @@
 import math
-from typing import List
+from itertools import cycle
+from typing import List, Tuple
 
 import networkx as nx
 import os
@@ -7,6 +8,7 @@ from matplotlib import pyplot as plt
 
 from raidensim.network.channel_network import ChannelNetwork
 from raidensim.network.node import Node
+from raidensim.types import Path
 
 
 def calc_positions(nodes, max_id, min_fullness, max_fullness):
@@ -61,23 +63,20 @@ def calc3d_positions(cn, hole_radius, dist_pdf):
     return positions, list(bi_edges)
 
 
-def path_to_edges(path):
-    edges = []
-    assert len(path) > 1
-    for i in range(len(path) - 1):
-        a, b = path[i:i + 2]
-        if a.uid < b.uid:
-            edges.append((a, b))
-        else:
-            edges.append((b, a))
-    return edges
+def calc_sector_angles(max_id, center, width):
+    # Start angle and end angle.
+    sangle = 90 - (center + width / 2) / float(max_id) * 360
+    eangle = 90 - (center - width / 2) / float(max_id) * 360
+    return sangle, eangle
 
 
 def draw2d(
         cn: ChannelNetwork,
-        path: List[Node] = None,
+        paths: List[Path] = None,
         highlighted_nodes: List[List[Node]] = None,
         helper_highlight=None,
+        kademlia_center: int=0,
+        kademlia_buckets: List[Tuple[int,int]]=None,
         draw_labels: bool=False,
         heatmap_attr: str=None,
         filepath: str=None
@@ -98,8 +97,7 @@ def draw2d(
 
     for helper in cn.helpers:
         # Angles start at (1,0) ccw, node IDs at (0,1) cw.
-        sangle = 90 - (helper.center + helper.range / 2) / float(cn.MAX_ID) * 360
-        eangle = 90 - (helper.center - helper.range / 2) / float(cn.MAX_ID) * 360
+        sangle, eangle = calc_sector_angles(cn.MAX_ID, helper.center, helper.range)
 
         # Magic numbers to make colors and radius distinct but deterministic.
         color = hsv_to_rgb(helper.center / 100.0 % 1, 0.9, 0.5)
@@ -128,20 +126,36 @@ def draw2d(
         nx.draw_networkx(
             cn, pos, edge_color=edge_color, node_size=1, with_labels=False, ax=ax, arrows=False
         )
-    if path:
-        nx.draw_networkx_edges(cn, pos, edgelist=path_to_edges(path), edge_color='r', arrows=False)
+    if paths:
+        edges = []
+        for path in paths:
+            for i in range(len(path) - 1):
+                edges.append((path[i], path[i+1]))
+        nx.draw_networkx_edges(cn, pos, edgelist=edges, edge_color='r', arrows=False)
 
     if draw_labels:
         labels = {node: node.uid for node in cn.nodes}
         nx.draw_networkx_labels(cn, pos, labels, font_size=6)
 
     if highlighted_nodes:
-        colors = ['r', 'b', 'c', 'g']
-        for i, highlighted_node_set in enumerate(highlighted_nodes):
-            color = colors[i % len(colors)]
+        colors = cycle(['r', 'b', 'c', 'g'])
+        for highlighted_node_set in highlighted_nodes:
             nx.draw_networkx_nodes(
-                cn, pos, nodelist=highlighted_node_set, node_size=12, node_color=color
+                cn, pos, nodelist=highlighted_node_set, node_size=12, node_color=next(colors)
             )
+
+    if kademlia_buckets:
+        colors = cycle(['r', 'b', 'c', 'g'])
+        for bucket in kademlia_buckets:
+            lcenter = kademlia_center - bucket[0] - (bucket[1] - bucket[0]) // 2
+            rcenter = kademlia_center + bucket[0] + (bucket[1] - bucket[0]) // 2
+            width = bucket[1] - bucket[0]
+
+            color = next(colors)
+            sangle, eangle = calc_sector_angles(cn.MAX_ID, lcenter, width)
+            ax.add_artist(Wedge((0, 0), 2, sangle, eangle, color=color, alpha=0.1))
+            sangle, eangle = calc_sector_angles(cn.MAX_ID, rcenter, width)
+            ax.add_artist(Wedge((0, 0), 2, sangle, eangle, color=color, alpha=0.1))
 
     if filepath:
         os.makedirs(os.path.dirname(filepath), exist_ok=True)

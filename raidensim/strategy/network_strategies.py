@@ -8,7 +8,9 @@ from raidensim.strategy.filter_strategies import (
     MinIncomingDepositFilterStrategy,
     MicroRaidenServerFilterStrategy,
     NotConnectedFilterStrategy,
-    AcceptedLimitsFilterStrategy
+    AcceptedLimitsFilterStrategy,
+    KademliaFilterStrategy,
+    MinMutualDepositFilterStrategy
 )
 from raidensim.strategy.selection_strategies import KademliaSelectionStrategy, \
     RandomSelectionStrategy
@@ -36,7 +38,7 @@ class SimpleNetworkStrategy(NetworkStrategy):
         NetworkStrategy.__init__(
             self,
             initiated_channels_mapping=initiated_channels_mapping,
-            selection_strategy=RandomSelectionStrategy(filter_strategies),
+            selection_strategy=RandomSelectionStrategy(filter_strategies=filter_strategies),
             connection_strategy=BidirectionalConnectionStrategy(deposit_mapping)
         )
 
@@ -48,9 +50,10 @@ class SimpleNetworkStrategy(NetworkStrategy):
 class RaidenNetworkStrategy(NetworkStrategy):
     def __init__(
             self,
-            min_incoming_deposit: float,
-            max_network_distance: float,
-            kademlia_targets_per_cycle: float,
+            min_partner_deposit: float,
+            max_distance: int,
+            kademlia_skip: int,
+            kademlia_tolerance: int,
             max_initiated_channels: IntRange,
             max_accepted_channels: IntRange,
             deposit: IntRange
@@ -68,17 +71,21 @@ class RaidenNetworkStrategy(NetworkStrategy):
         filter_strategies = [
             IdentityFilterStrategy(),
             NotConnectedFilterStrategy(),
-            DistanceFilterStrategy(max_network_distance),
+            # KademliaFilterStrategy(max_distance, kademlia_skip, kademlia_tolerance),
+            DistanceFilterStrategy(max_distance),
             FullerFilterStrategy(),
             AcceptedLimitsFilterStrategy(accepted_channels_mapping),
-            MinIncomingDepositFilterStrategy(deposit_mapping, min_incoming_deposit)
+            MinIncomingDepositFilterStrategy(deposit_mapping, min_partner_deposit)
+            # MinMutualDepositFilterStrategy(deposit_mapping, min_partner_deposit)
         ]
 
         selection_strategy = KademliaSelectionStrategy(
-            max_network_distance=max_network_distance,
-            targets_per_cycle=kademlia_targets_per_cycle,
+            max_distance=max_distance,
+            skip=kademlia_skip,
             filter_strategies=filter_strategies
         )
+
+        # selection_strategy = RandomSelectionStrategy(filter_strategies=filter_strategies)
 
         NetworkStrategy.__init__(
             self,

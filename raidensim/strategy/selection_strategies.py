@@ -1,5 +1,6 @@
 import bisect
 import random
+from itertools import cycle
 from typing import Dict, Any, Iterable
 
 import math
@@ -48,32 +49,24 @@ class KademliaSelectionStrategy(CachedNetworkSelectionStrategy):
     For each node, a desired target distance is computed. Then, a node is searched that comes
     closest to this distance (in either direction).
 
-    Desired target distance starts at 1 and increases up to `max_network_distance` at the
+    Desired target distance starts at 1 and increases up to `max_distance` at the
     `targets_per_cycle - 1`th target. This cycle is repeated until enough connections have been
     established or no more target nodes can be found.
 
     This results in a network with dense connections in their vicinity and fewer connections to
     more distant nodes.
     """
-    def __init__(self, max_network_distance, targets_per_cycle, **kwargs):
+
+    def __init__(self, max_distance: int, skip: int, **kwargs):
         CachedNetworkSelectionStrategy.__init__(self, **kwargs)
-        self.max_network_distance = max_network_distance
-        self.targets_per_cycle=targets_per_cycle
-
-    def _distances(self, max_distance: float) -> Iterable[int]:
-        i = 0
-        distance_base = max_distance ** (1 / (self.targets_per_cycle - 1))
-
-        while True:
-            yield distance_base ** i
-            i = (i + 1) % self.targets_per_cycle
+        targets_per_cycle = int(math.log(max_distance, 2)) + 1
+        self.distances = [int(2 ** i) for i in range(skip, targets_per_cycle)]
 
     def targets(
             self, node: NodeConnectionData, node_to_connection_data: Dict[Node, Dict[str, Any]]
     ) -> Iterable[NodeConnectionData]:
         self._update_network_cache(node[0].cn)
-        max_distance = self.max_network_distance * node[0].cn.MAX_ID
-        distances = self._distances(max_distance)
+        distances = cycle(self.distances)
         while True:
             target_id = (node[0].uid + next(distances)) % node[0].cn.MAX_ID
             # Find node on or after target ID (ignoring filters).

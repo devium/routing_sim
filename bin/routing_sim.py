@@ -1,5 +1,6 @@
 import os
 
+from raidensim.network.channel_network import ChannelNetwork
 from raidensim.network.config import NetworkConfiguration
 from raidensim.network.dist import (
     ParetoDistribution,
@@ -27,16 +28,17 @@ OUT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, '../out'))
 
 
 NETWORK_CONFIG_RAIDEN_NETWORK = NetworkConfiguration(
-    num_nodes=500,
+    num_nodes=2000,
     # fullness_dist=CircleDistribution(),
     # fullness_dist=ParetoDistribution(5, 0, 1),
     fullness_dist=BetaDistribution(0.5, 2),
     network_strategy=RaidenNetworkStrategy(
-        min_incoming_deposit=0.0,
-        max_network_distance=1/8,
-        kademlia_targets_per_cycle=8,
+        min_partner_deposit=0.2,
+        max_distance=int(1/4 * ChannelNetwork.MAX_ID),
+        kademlia_skip=22,
+        kademlia_tolerance=int(1/256 * ChannelNetwork.MAX_ID),
         max_initiated_channels=(1, 10),
-        max_accepted_channels=(2, 10),
+        max_accepted_channels=(6, 14),
         deposit=(4, 100)
     )
 )
@@ -74,7 +76,9 @@ def run():
         # distance_net_balance_next_hop_routing,
         # assisted_next_hop_routing
     ]
-    simulate_routing(config, OUT_DIR, num_paths=5, value=1, routing_models=routing_models)
+    simulate_routing(
+        config, OUT_DIR, num_sample_nodes=20, num_paths=5, value=1, routing_models=routing_models
+    )
 
     # Network scaling simulation.
     routing_models = [
