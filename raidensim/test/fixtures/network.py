@@ -1,6 +1,6 @@
 import pytest
 
-from raidensim.network.channel_network import ChannelNetwork
+from raidensim.network.network import Network
 from raidensim.network.config import NetworkConfiguration
 from raidensim.network.dist import Distribution
 from raidensim.strategy.network_strategies import SimpleNetworkStrategy
@@ -19,14 +19,18 @@ class DistinctDistribution(Distribution):
 
 
 @pytest.fixture
-def network_2_nodes():
+def network_2_nodes() -> Network:
+    max_id = 2**32
+
     config = NetworkConfiguration(
         num_nodes=2,
+        max_id=max_id,
         fullness_dist=DistinctDistribution(),
         network_strategy=SimpleNetworkStrategy(
+            max_id=max_id,
             max_initiated_channels=(0, 1),
             deposit=(15, 20)
         )
     )
-    return ChannelNetwork(config)
+    return Network(config)
 

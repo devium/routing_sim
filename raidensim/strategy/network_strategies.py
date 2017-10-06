@@ -12,15 +12,17 @@ from raidensim.strategy.filter_strategies import (
     KademliaFilterStrategy,
     MinMutualDepositFilterStrategy
 )
+from raidensim.strategy.network_strategy import NetworkStrategy
+from raidensim.strategy.position_strategies import RingPositionStrategy
 from raidensim.strategy.selection_strategies import KademliaSelectionStrategy, \
     RandomSelectionStrategy
-from raidensim.strategy.strategy import NetworkStrategy
 from raidensim.types import Fullness, IntRange
 
 
 class SimpleNetworkStrategy(NetworkStrategy):
     def __init__(
             self,
+            max_id: int,
             max_initiated_channels: IntRange,
             deposit: IntRange
     ):
@@ -39,7 +41,8 @@ class SimpleNetworkStrategy(NetworkStrategy):
             self,
             initiated_channels_mapping=initiated_channels_mapping,
             selection_strategy=RandomSelectionStrategy(filter_strategies=filter_strategies),
-            connection_strategy=BidirectionalConnectionStrategy(deposit_mapping)
+            connection_strategy=BidirectionalConnectionStrategy(deposit_mapping),
+            position_strategy=RingPositionStrategy(max_id)
         )
 
     @staticmethod
@@ -50,14 +53,13 @@ class SimpleNetworkStrategy(NetworkStrategy):
 class RaidenNetworkStrategy(NetworkStrategy):
     def __init__(
             self,
+            max_id: int,
             min_partner_deposit: float,
             max_distance: int,
             kademlia_skip: int,
-            kademlia_tolerance: int,
             max_initiated_channels: IntRange,
             max_accepted_channels: IntRange,
             deposit: IntRange
-
     ):
         def initiated_channels_mapping(fullness: Fullness):
             return self._linear_int(*max_initiated_channels, fullness)
@@ -68,18 +70,19 @@ class RaidenNetworkStrategy(NetworkStrategy):
         def deposit_mapping(fullness: Fullness):
             return self._linear_int(*deposit, fullness)
 
+        position_strategy = RingPositionStrategy(max_id)
+
         filter_strategies = [
             IdentityFilterStrategy(),
             NotConnectedFilterStrategy(),
-            # KademliaFilterStrategy(max_distance, kademlia_skip, kademlia_tolerance),
-            DistanceFilterStrategy(max_distance),
+            DistanceFilterStrategy(position_strategy, max_distance),
             FullerFilterStrategy(),
             AcceptedLimitsFilterStrategy(accepted_channels_mapping),
             MinIncomingDepositFilterStrategy(deposit_mapping, min_partner_deposit)
-            # MinMutualDepositFilterStrategy(deposit_mapping, min_partner_deposit)
         ]
 
         selection_strategy = KademliaSelectionStrategy(
+            max_id=max_id,
             max_distance=max_distance,
             skip=kademlia_skip,
             filter_strategies=filter_strategies
@@ -91,7 +94,8 @@ class RaidenNetworkStrategy(NetworkStrategy):
             self,
             initiated_channels_mapping=initiated_channels_mapping,
             selection_strategy=selection_strategy,
-            connection_strategy=BidirectionalConnectionStrategy(deposit_mapping)
+            connection_strategy=BidirectionalConnectionStrategy(deposit_mapping),
+            position_strategy=position_strategy
         )
 
     @staticmethod
@@ -106,6 +110,7 @@ class RaidenNetworkStrategy(NetworkStrategy):
 class MicroRaidenNetworkStrategy(NetworkStrategy):
     def __init__(
             self,
+            max_id: int,
             max_initiated_channels: IntRange,
             deposit: int
     ):
@@ -132,5 +137,6 @@ class MicroRaidenNetworkStrategy(NetworkStrategy):
             self,
             initiated_channels_mapping=initiated_channels_mapping,
             selection_strategy=selection_strategy,
-            connection_strategy=BidirectionalConnectionStrategy(deposit_mapping)
+            connection_strategy=BidirectionalConnectionStrategy(deposit_mapping),
+            position_strategy = RingPositionStrategy(max_id)
         )

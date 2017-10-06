@@ -3,7 +3,9 @@ from typing import Callable
 
 import math
 
-from raidensim.strategy.strategy import FilterStrategy, NodeConnectionData
+from raidensim.network.node import Node
+from raidensim.network.raw_network import RawNetwork
+from raidensim.strategy.network_strategy import FilterStrategy, PositionStrategy
 from raidensim.types import Fullness
 
 
@@ -12,8 +14,8 @@ class IdentityFilterStrategy(FilterStrategy):
     Disallows connections from a node to itself.
     """
 
-    def filter(self, a: NodeConnectionData, b: NodeConnectionData):
-        return a[0] != b[0]
+    def filter(self, raw: RawNetwork, a: Node, b: Node):
+        return a != b
 
 
 class NotConnectedFilterStrategy(FilterStrategy):
@@ -21,8 +23,8 @@ class NotConnectedFilterStrategy(FilterStrategy):
     Disallows multiple connections between two nodes.
     """
 
-    def filter(self, a: NodeConnectionData, b: NodeConnectionData):
-        return b[0] not in a[0].cn[a[0]]
+    def filter(self, raw: RawNetwork, a: Node, b: Node):
+        return b not in raw[a]
 
 
 class DistanceFilterStrategy(FilterStrategy):
@@ -30,11 +32,12 @@ class DistanceFilterStrategy(FilterStrategy):
     Disallows connections above a certain network distance.
     """
 
-    def __init__(self, max_distance: int):
+    def __init__(self, position_strategy: PositionStrategy, max_distance: int):
+        self.position_strategy = position_strategy
         self.max_distance = max_distance
 
-    def filter(self, a: NodeConnectionData, b: NodeConnectionData):
-        return a[0].ring_distance(b[0]) <= self.max_distance
+    def filter(self, raw: RawNetwork, a: Node, b: Node):
+        return self.position_strategy.distance(a, b) <= self.max_distance
 
 
 class FullerFilterStrategy(FilterStrategy):
@@ -42,8 +45,8 @@ class FullerFilterStrategy(FilterStrategy):
     Disallows connections to emptier nodes (but not from emptier nodes).
     """
 
-    def filter(self, a: NodeConnectionData, b: NodeConnectionData):
-        return a[0].fullness <= b[0].fullness
+    def filter(self, raw: RawNetwork, a: Node, b: Node):
+        return a.fullness <= b.fullness
 
 
 class MinIncomingDepositFilterStrategy(FilterStrategy):
@@ -56,9 +59,9 @@ class MinIncomingDepositFilterStrategy(FilterStrategy):
         self.deposit_mapping = deposit_mapping
         self.min_incoming_deposit = min_incoming_deposit
 
-    def filter(self, a: NodeConnectionData, b: NodeConnectionData):
-        deposit_a = self.deposit_mapping(a[0].fullness)
-        deposit_b = self.deposit_mapping(b[0].fullness)
+    def filter(self, raw: RawNetwork, a: Node, b: Node):
+        deposit_a = self.deposit_mapping(a.fullness)
+        deposit_b = self.deposit_mapping(b.fullness)
         return deposit_a >= self.min_incoming_deposit * deposit_b
 
 
@@ -72,9 +75,9 @@ class MinMutualDepositFilterStrategy(FilterStrategy):
         self.deposit_mapping = deposit_mapping
         self.min_incoming_deposit = min_deposit
 
-    def filter(self, a: NodeConnectionData, b: NodeConnectionData):
-        deposit_a = self.deposit_mapping(a[0].fullness)
-        deposit_b = self.deposit_mapping(b[0].fullness)
+    def filter(self, raw: RawNetwork, a: Node, b: Node):
+        deposit_a = self.deposit_mapping(a.fullness)
+        deposit_b = self.deposit_mapping(b.fullness)
         return deposit_a >= self.min_incoming_deposit * deposit_b and \
             deposit_b >= self.min_incoming_deposit * deposit_a
 
@@ -89,9 +92,9 @@ class IncomingLimitsFilterStrategy(FilterStrategy):
     def __init__(self, max_incoming_channels_mapping: Callable[[Fullness], int]):
         self.max_incoming_channels_mapping = max_incoming_channels_mapping
 
-    def filter(self, a: NodeConnectionData, b: NodeConnectionData):
-        max_incoming_channels = self.max_incoming_channels_mapping(b[0].fullness)
-        return b[1]['num_incoming_channels'] < max_incoming_channels
+    def filter(self, raw: RawNetwork, a: Node, b: Node):
+        max_incoming_channels = self.max_incoming_channels_mapping(b.fullness)
+        return b['num_incoming_channels'] < max_incoming_channels
 
 
 class AcceptedLimitsFilterStrategy(FilterStrategy):
@@ -102,9 +105,9 @@ class AcceptedLimitsFilterStrategy(FilterStrategy):
     def __init__(self, max_accepted_channels_mapping: Callable[[Fullness], int]):
         self.max_accepted_channels_mapping = max_accepted_channels_mapping
 
-    def filter(self, a: NodeConnectionData, b: NodeConnectionData):
-        max_accepted_channels = self.max_accepted_channels_mapping(b[0].fullness)
-        return b[1]['num_accepted_channels'] < max_accepted_channels
+    def filter(self, raw: RawNetwork, a: Node, b: Node):
+        max_accepted_channels = self.max_accepted_channels_mapping(b.fullness)
+        return b['num_accepted_channels'] < max_accepted_channels
 
 
 class TotalLimitsFilterStrategy(FilterStrategy):
@@ -116,10 +119,10 @@ class TotalLimitsFilterStrategy(FilterStrategy):
     def __init__(self, max_total_channels_mapping: Callable[[Fullness], int]):
         self.max_total_channels_mapping = max_total_channels_mapping
 
-    def filter(self, a: NodeConnectionData, b: NodeConnectionData):
-        max_total_channels = self.max_total_channels_mapping(b[0].fullness)
-        num_incoming_channels = b[1]['num_incoming_channels']
-        num_outgoing_channels = b[1]['num_outgoing_channels']
+    def filter(self, raw: RawNetwork, a: Node, b: Node):
+        max_total_channels = self.max_total_channels_mapping(b.fullness)
+        num_incoming_channels = b['num_incoming_channels']
+        num_outgoing_channels = b['num_outgoing_channels']
         return num_incoming_channels + num_outgoing_channels < max_total_channels
 
 
@@ -135,18 +138,16 @@ class ThresholdFilterStrategy(FilterStrategy):
     For example, light clients with just a single channel should have a threshold of 0, only
     connecting upward to fuller nodes.
 
-    The threshold is relative to the network size, e.g. 1/8 or 1/10, etc.
-
     Note: This strategy has turned out to be really bad.
     """
 
     def __init__(self, threshold_mapping: Callable[[Fullness], int]):
         self.threshold_mapping = threshold_mapping
 
-    def filter(self, a: NodeConnectionData, b: NodeConnectionData):
-        emptier, fuller = sorted([a[0], b[0]], key=lambda u: u.fullness)
-        threshold_fuller = self.threshold_mapping(fuller.fullness) * fuller.cn.MAX_ID
-        threshold_emptier = self.threshold_mapping(emptier.fullness) * fuller.cn.MAX_ID
+    def filter(self, raw: RawNetwork, a: Node, b: Node):
+        emptier, fuller = sorted([a, b], key=lambda u: u.fullness)
+        threshold_fuller = self.threshold_mapping(fuller.fullness)
+        threshold_emptier = self.threshold_mapping(emptier.fullness)
         distance = fuller.ring_distance(emptier)
         return threshold_emptier < distance < threshold_fuller
 
@@ -158,12 +159,15 @@ class KademliaFilterStrategy(FilterStrategy):
     selection strategy.
     """
 
-    def __init__(self, max_distance: int, skip: int, tolerance: int):
+    def __init__(
+            self, position_strategy: PositionStrategy, max_distance: int, skip: int, tolerance: int
+    ):
+        self.position_strategy = position_strategy
         targets_per_cycle = int(math.log(max_distance, 2)) + 1
         distances = [int(2 ** i) for i in range(skip, targets_per_cycle)]
         self.buckets = [(max(0, d - tolerance), d + tolerance) for d in distances]
 
-    def filter(self, a: NodeConnectionData, b: NodeConnectionData) -> bool:
+    def filter(self, raw: RawNetwork, a: Node, b: Node):
         """
         Preserve the following properties:
         - Kademlia produces target IDs at exponentially increasing distances.
@@ -174,10 +178,10 @@ class KademliaFilterStrategy(FilterStrategy):
         - Leaky buckets (as invalid example above) have to be refilled from closest to furthest.
         => New nodes have to be in the left-most bucket with minimum amount of nodes.
         """
-        # Cycle through buckets and assign partners to them. The first bucket running out of
-        # valid partners will be the new target bucket.
+        # Cycle through buckets and assign partners to them. The first bucket running out of valid
+        # partners will be the new target bucket.
         partner_distances = sorted(
-            (a[0].ring_distance(partner), i) for i, partner in enumerate(a[0].partners)
+            (self.position_strategy.distance(a, partner), i) for i, partner in enumerate(raw[a])
         )
         bucket = None
         try:
@@ -189,7 +193,7 @@ class KademliaFilterStrategy(FilterStrategy):
                 del partner_distances[i]
         except StopIteration:
             pass
-        return bucket[0] <= a[0].ring_distance(b[0]) < bucket[1]
+        return bucket[0] <= self.position_strategy.distance(a, b) < bucket[1]
 
 
 class MicroRaidenServerFilterStrategy(FilterStrategy):
@@ -197,5 +201,5 @@ class MicroRaidenServerFilterStrategy(FilterStrategy):
     Allows nodes to only connect to server nodes (fullness > 0).
     """
 
-    def filter(self, a: NodeConnectionData, b: NodeConnectionData):
-        return b[0].fullness > 0
+    def filter(self, raw: RawNetwork, a: Node, b: Node):
+        return b.fullness > 0

@@ -6,10 +6,9 @@ import shutil
 
 import os
 
+from raidensim.network.network import Network
 from raidensim.routing.routing_model import RoutingModel
 from raidensim.strategy.filter_strategies import KademliaFilterStrategy
-from raidensim.tools import draw2d
-from raidensim.network.channel_network import ChannelNetwork
 from raidensim.network.config import NetworkConfiguration
 
 
@@ -25,7 +24,7 @@ def simulate_routing(
     # Setup network.
     config.fullness_dist.reset()
     random.seed(0)
-    cn = ChannelNetwork(config)
+    net = Network(config)
 
     # Prepare folder.
     dirpath = os.path.join(out_dir, 'routing_{}'.format(config.num_nodes))
@@ -34,8 +33,8 @@ def simulate_routing(
 
     # Plot baseline network.
     print('Plotting network.')
-    draw2d(cn, filepath=os.path.join(dirpath, 'network'))
-    draw2d(cn, draw_labels=True, filepath=os.path.join(dirpath, 'network_labels'))
+    net.draw(filepath=os.path.join(dirpath, 'network'))
+    net.draw(draw_labels=True, filepath=os.path.join(dirpath, 'network_labels'))
 
     # Plot connectivity of a few random sample nodes.
     if num_sample_nodes > 0:
@@ -49,44 +48,41 @@ def simulate_routing(
     except StopIteration:
         kademlia_filter = None
 
-    for i, node in enumerate(random.sample(cn.nodes, num_sample_nodes)):
-        channels = [[node, partner] for partner in node.partners]
+    for i, node in enumerate(random.sample(net.raw.nodes, num_sample_nodes)):
+        channels = [[node, partner] for partner in net.raw[node]]
         if kademlia_filter:
-            draw2d(
-                cn,
+            net.draw(
                 channels,
                 kademlia_center=node.uid,
                 kademlia_buckets=kademlia_filter.buckets,
                 filepath=os.path.join(dirpath, 'node_{}'.format(i))
             )
         else:
-            draw2d(cn, channels, filepath=os.path.join(dirpath, 'node_{}'.format(i)))
+            net.draw(channels, filepath=os.path.join(dirpath, 'node_{}'.format(i)))
 
     # Perform routing.
     # cn.nodes order is non-deterministic. Sort for reproducible sampling.
-    nodes_sorted = sorted(cn.nodes, key=lambda node: node.uid)
+    nodes_sorted = sorted(net.raw.nodes, key=lambda node: node.uid)
     for ip in range(num_paths):
         print('Path #{}'.format(ip))
         dirpath = os.path.join(dirpath, 'nodes_{}'.format(ip))
         os.makedirs(dirpath, exist_ok=True)
         source, target = random.sample(nodes_sorted, 2)
-        draw2d(
-            cn, highlighted_nodes=[[], [source, target]], filepath=os.path.join(dirpath, 'nodes')
-        )
+        net.draw(highlighted_nodes=[[], [source, target]], filepath=os.path.join(dirpath, 'nodes'))
 
         for ir, routing_model in enumerate(routing_models):
             routing_name = '{}_{}'.format(ir, routing_model.__class__.__name__)
 
             print(routing_name)
-            path, path_history = routing_model.route(source, target, value)
+            path, path_history = routing_model.route(net.raw, source, target, value)
 
             dirpath = os.path.join(dirpath, routing_name)
             os.makedirs(dirpath, exist_ok=True)
             if path:
                 print('Found path of length {}: {}'.format(len(path), path))
                 filename = 'path.png'
-                draw2d(
-                    cn, [path], [path, [source, target]], filepath=os.path.join(dirpath, filename)
+                net.draw(
+                    [path], [path, [source, target]], filepath=os.path.join(dirpath, filename)
                 )
             else:
                 print('No path found.')
@@ -115,8 +111,8 @@ def simulate_routing(
                         break
                     filename = 'step_{:04d}.png'.format(isp)
                     gif_filenames.append(filename)
-                    draw2d(
-                        cn, [subpath], [visited, [source, target]],
+                    net.draw(
+                        [subpath], [visited, [source, target]],
                         filepath=os.path.join(dirpath, filename)
                     )
 

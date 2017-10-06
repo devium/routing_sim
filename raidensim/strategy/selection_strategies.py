@@ -1,13 +1,13 @@
 import bisect
 import random
 from itertools import cycle
-from typing import Dict, Any, Iterable
+from typing import Iterable
 
 import math
 
-from raidensim.network.channel_network import ChannelNetwork
+from raidensim.network.raw_network import RawNetwork
 from raidensim.network.node import Node
-from raidensim.strategy.strategy import SelectionStrategy, NodeConnectionData
+from raidensim.strategy.network_strategy import SelectionStrategy, PositionStrategy
 
 
 class CachedNetworkSelectionStrategy(SelectionStrategy):
@@ -18,26 +18,24 @@ class CachedNetworkSelectionStrategy(SelectionStrategy):
         SelectionStrategy.__init__(self, **kwargs)
 
         # Cached network information.
-        self.cached_cn = None
+        self.cached_raw = None
         self.nodes = []
         self.node_ids_sorted = []
         self.node_id_to_node = {}
 
-    def _update_network_cache(self, cn: ChannelNetwork):
+    def _update_network_cache(self, raw: RawNetwork):
         # Best guess on an up-to-date cache. Not an issue with constant-node networks.
-        if len(self.nodes) == len(cn.nodes) and self.cached_cn == cn:
+        if len(self.nodes) == len(raw.nodes) and self.cached_raw == raw:
             return
 
         # Nodes shuffled for easy random sampling.
-        self.nodes = list(cn.nodes)
+        self.nodes = list(raw.nodes)
         random.shuffle(self.nodes)
-        self.node_id_to_node = {node.uid: node for node in cn.nodes}
-        self.node_ids_sorted = sorted(node.uid for node in cn.nodes)
-        self.cached_cn = cn
+        self.node_id_to_node = {node.uid: node for node in raw.nodes}
+        self.node_ids_sorted = sorted(node.uid for node in raw.nodes)
+        self.cached_raw = raw
 
-    def targets(
-            self, node: NodeConnectionData, node_to_connection_data: Dict[Node, Dict[str, Any]]
-    ) -> Iterable[NodeConnectionData]:
+    def targets(self, raw: RawNetwork, node: Node) -> Iterable[Node]:
         raise NotImplementedError
 
 
@@ -57,18 +55,25 @@ class KademliaSelectionStrategy(CachedNetworkSelectionStrategy):
     more distant nodes.
     """
 
-    def __init__(self, max_distance: int, skip: int, **kwargs):
+    def __init__(
+            self,
+            max_id: int,
+            max_distance: int,
+            skip: int, **kwargs
+    ):
+        self.max_id = max_id
         CachedNetworkSelectionStrategy.__init__(self, **kwargs)
         targets_per_cycle = int(math.log(max_distance, 2)) + 1
         self.distances = [int(2 ** i) for i in range(skip, targets_per_cycle)]
 
-    def targets(
-            self, node: NodeConnectionData, node_to_connection_data: Dict[Node, Dict[str, Any]]
-    ) -> Iterable[NodeConnectionData]:
-        self._update_network_cache(node[0].cn)
+    def _ring_distance(self, a: int, b: int):
+        return min((a - b) % self.max_id, (b - a) % self.max_id)
+
+    def targets(self, raw: RawNetwork, node: Node) -> Iterable[Node]:
+        self._update_network_cache(raw)
         distances = cycle(self.distances)
         while True:
-            target_id = (node[0].uid + next(distances)) % node[0].cn.MAX_ID
+            target_id = (node.uid + next(distances)) % self.max_id
             # Find node on or after target ID (ignoring filters).
             i_right = bisect.bisect_left(self.node_ids_sorted, target_id)
             num_nodes = len(self.node_ids_sorted)
@@ -82,8 +87,8 @@ class KademliaSelectionStrategy(CachedNetworkSelectionStrategy):
 
             while True:
                 # Find next closest node (either to left or right).
-                d_left = node[0].cn.ring_distance(self.node_ids_sorted[i_left], target_id)
-                d_right = node[0].cn.ring_distance(self.node_ids_sorted[i_right], target_id)
+                d_left = self._ring_distance(self.node_ids_sorted[i_left], target_id)
+                d_right = self._ring_distance(self.node_ids_sorted[i_right], target_id)
                 if d_left < d_right:
                     i_side = -1
                     i = i_left
@@ -97,30 +102,23 @@ class KademliaSelectionStrategy(CachedNetworkSelectionStrategy):
                     i_right = (i_right + 1) % num_nodes
 
                 target = self.node_id_to_node[self.node_ids_sorted[i]]
-                target_data = node_to_connection_data[target]
-                if self.match(node, (target, target_data)):
+                if self.match(raw, node, target):
                     break
 
                 if last_iteration:
                     # We made one entire revolution without results. End of generator.
                     raise StopIteration
 
-                if node[0].cn.ring_distance(i_left, i_right) <= 1:
+                if self._ring_distance(i_left, i_right) <= 1:
                     # Left and Right are now either the same or 1 node apart. We covered all nodes.
                     last_iteration = True
 
-            yield target, target_data
+            yield target
 
 
 class RandomSelectionStrategy(CachedNetworkSelectionStrategy):
-    def targets(
-            self, node: NodeConnectionData, node_to_connection_data: Dict[Node, Dict[str, Any]]
-    ) -> Iterable[NodeConnectionData]:
-        self._update_network_cache(node[0].cn)
-        i = 0
-        while i < len(self.nodes):
-            other = self.nodes[i]
-            other_data = node_to_connection_data[other]
-            if self.match(node, (other, other_data)):
-                yield (other, other_data)
-            i += 1
+    def targets(self, raw: RawNetwork, node: Node) -> Iterable[Node]:
+        self._update_network_cache(raw)
+        for other in self.nodes:
+            if self.match(raw, node, other):
+                yield other

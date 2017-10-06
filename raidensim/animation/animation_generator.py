@@ -1,14 +1,15 @@
+import time
 import json
 import os
 import random
-import time
 from collections import namedtuple
 from typing import List
 
-from raidensim.network.channel_network import ChannelNetwork
+from raidensim.network.network import Network
 from raidensim.network.node import Node
 from raidensim.strategy.network_strategies import MicroRaidenNetworkStrategy
-from raidensim.tools import CurveEditor, calc3d_positions
+from raidensim.tools.curve_editor import CurveEditor
+from raidensim.tools.draw import calc3d_positions
 from .config import AnimationConfiguration
 
 
@@ -26,17 +27,18 @@ class AnimationGenerator(object):
 
         self.popup_curve = None
         self.transfer_curve = None
-        self.cn = None
+        self.net = None
         self.channels = []
         self.node_to_index = dict()
         self.channel_to_index = dict()
         self.hidden_nodes = set()
         self.hidden_channels = set()
+        self.edges = {}
         self.visible_nodes = set()
         self.visible_channels = set()
         self.animations = []
         self.transfer_id = 0
-        self.time = 0.0
+        self.t = 0.0
 
         try:
             os.makedirs(self.config.out_dir)
@@ -89,11 +91,11 @@ class AnimationGenerator(object):
         # Export final network configuration.
         random.seed(0)
 
-        self.cn = ChannelNetwork(self.config.network)
-        self.node_to_index = {node: index for index, node in enumerate(self.cn.nodes)}
+        self.net = Network(self.config.network)
+        self.node_to_index = {node: index for index, node in enumerate(self.net.raw.nodes)}
 
         node_pos, self.channels = calc3d_positions(
-            self.cn,
+            self.net,
             self.config.top_hole_radius,
             dist_pdf=self.config.network.fullness_dist.get_pdf()
         )
@@ -111,11 +113,12 @@ class AnimationGenerator(object):
     def reset_network(self):
         # Revert simulation back to an edgeless network. Build animations from there.
         if self.config.popup_channels:
-            self.hidden_nodes = set(self.cn.nodes)
+            self.hidden_nodes = set(self.net.raw.nodes)
             self.hidden_channels = self.channels.copy()
-            self.cn.remove_edges_from(list(self.cn.edges))
+            self.edges = dict(self.net.raw.edges)
+            self.net.raw.remove_edges_from(list(self.net.raw.edges))
         else:
-            self.visible_nodes = set(self.cn.nodes)
+            self.visible_nodes = set(self.net.raw.nodes)
             self.visible_channels = self.channels.copy()
 
     def generate_animation(self):
@@ -124,30 +127,30 @@ class AnimationGenerator(object):
         last_popup = 0.0
         last_transfer = 0.0
         tic = time.time()
-        while self.time < self.config.animation_length:
+        while self.t < self.config.animation_length:
             toc = time.time()
             if toc - tic > 5:
                 tic = toc
                 print('Animation progress: {:.2f}/{:.2f}'.format(
-                    self.time, self.config.animation_length
+                    self.t, self.config.animation_length
                 ))
 
             if self.config.popup_channels:
-                channel_popup_freq = self.popup_curve.evaluate(self.time)
+                channel_popup_freq = self.popup_curve.evaluate(self.t)
                 channel_popup_delta = 1.0 / channel_popup_freq if channel_popup_freq else 1e12
 
-                while self.hidden_channels and self.time - last_popup >= channel_popup_delta:
+                while self.hidden_channels and self.t - last_popup >= channel_popup_delta:
                     last_popup += channel_popup_delta
                     self.create_channels(1, connected_only=bool(self.animations))
 
-            transfer_freq = self.transfer_curve.evaluate(self.time)
+            transfer_freq = self.transfer_curve.evaluate(self.t)
             transfer_delta = 1.0 / transfer_freq if transfer_freq else 1e12
 
-            while len(self.visible_nodes) >= 2 and self.time - last_transfer >= transfer_delta:
+            while len(self.visible_nodes) >= 2 and self.t - last_transfer >= transfer_delta:
                 last_transfer += transfer_delta
                 self.create_transfer()
 
-            self.time += self.config.simulation_step_size
+            self.t += self.config.simulation_step_size
 
         print('Last channel popup at {}'.format(last_popup))
 
@@ -169,7 +172,7 @@ class AnimationGenerator(object):
 
             self.popup_nodes(channel)
             self.animations.append(self.Animation(
-                time=self.time,
+                time=self.t,
                 animation_type='show',
                 element_type='channel',
                 element_id=self.channel_to_index[channel],
@@ -187,7 +190,7 @@ class AnimationGenerator(object):
 
         for node in nodes:
             self.animations.append(self.Animation(
-                time=self.time,
+                time=self.t,
                 animation_type='show',
                 element_type='node',
                 element_id=self.node_to_index[node],
@@ -213,8 +216,8 @@ class AnimationGenerator(object):
 
         self.popup_channels(new_channels)
         for a, b in new_channels:
-            a.setup_channel(b)
-            b.setup_channel(a)
+            self.net.raw.add_edge(a, b, **self.edges[a, b])
+            self.net.raw.add_edge(b, a, **self.edges[b, a])
 
     def create_transfer(self):
         for i in range(self.config.transfer_attempts_max):
@@ -226,7 +229,9 @@ class AnimationGenerator(object):
                     break
             else:
                 source, target = random.sample(self.visible_nodes, 2)
-                path, _ = self.config.routing_model.route(source, target, self.config.transfer_value)
+                path, _ = self.config.routing_model.route(
+                    self.net.raw, source, target, self.config.transfer_value
+                )
                 if path:
                     # Find channel for each hop.
                     self.flash_route(path)
@@ -239,7 +244,7 @@ class AnimationGenerator(object):
         """
         for node in nodes:
             self.animations.append(self.Animation(
-                time=self.time + time_offset,
+                time=self.t + time_offset,
                 animation_type='flash',
                 element_type='node',
                 element_id=self.node_to_index[node],
@@ -256,7 +261,7 @@ class AnimationGenerator(object):
         for i in range(len(route) - 1):
             self.flash_nodes([route[i + 1]], time_offset)
             self.animations.append(self.Animation(
-                time=self.time + time_offset,
+                time=self.t + time_offset,
                 animation_type='flash',
                 element_type='channel',
                 element_id=self.channel_to_index[frozenset([route[i], route[i+1]])],

@@ -1,8 +1,8 @@
 import heapq
 from typing import List
 
-from raidensim.network.channel_network import ChannelNetwork
 from raidensim.network.node import Node
+from raidensim.network.raw_network import RawNetwork
 from raidensim.routing.routing_model import RoutingModel
 from raidensim.types import Path
 
@@ -10,7 +10,7 @@ from raidensim.types import Path
 class PriorityModel(object):
     def priority(
             self,
-            cn: ChannelNetwork,
+            raw: RawNetwork,
             source: Node,
             u: Node,
             v: Node,
@@ -30,7 +30,7 @@ class NextHopRoutingModel(RoutingModel):
         self.priority_model = priority_model
         self.max_paths=max_paths
 
-    def route(self, source: Node, target: Node, value: int) -> (Path, List[Path]):
+    def route(self, raw: RawNetwork, source: Node, target: Node, value: int) -> (Path, List[Path]):
         """
         Modified BFS using a priority queue instead of a normal queue.
         Lower priority value means higher actual priority.
@@ -56,12 +56,10 @@ class NextHopRoutingModel(RoutingModel):
             if len(path_history) >= self.max_paths:
                 return [], path_history
 
-            for v, e in u.partners.items():
+            for v, e in raw[u].items():
                 if v not in visited and e['capacity'] >= value:
                     new_path = path + [v]
-                    priority = self.priority_model.priority(
-                        source.cn, source, u, v, e, target, value
-                    )
+                    priority = self.priority_model.priority(raw, source, u, v, e, target, value)
                     i += 1
                     queue_entry = (priority, len(new_path), i, new_path)
                     heapq.heappush(queue, queue_entry)

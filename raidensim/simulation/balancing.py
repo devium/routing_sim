@@ -10,10 +10,10 @@ from typing import List
 import matplotlib.pyplot as plt
 import shutil
 
-from raidensim.network.channel_network import ChannelNetwork
 from raidensim.network.config import NetworkConfiguration
+from raidensim.network.network import Network
+from raidensim.network.raw_network import RawNetwork
 from raidensim.routing.routing_model import RoutingModel
-from raidensim.tools import draw2d
 from raidensim.types import Path
 from raidensim.util import sigmoid
 
@@ -33,27 +33,27 @@ def simulate_balancing(
     # Setup network.
     random.seed(0)
     config.fullness_dist.reset()
-    cn = ChannelNetwork(config)
+    net = Network(config)
 
     # Baseline data.
-    pre_capacities = get_channel_capacities(cn)
-    pre_net_balances = get_channel_net_balances(cn)
-    pre_imbalances = get_channel_imbalances(cn)
-    nums_channels = get_channel_counts(cn)
+    pre_capacities = get_channel_capacities(net.raw)
+    pre_net_balances = get_channel_net_balances(net.raw)
+    pre_imbalances = get_channel_imbalances(net.raw)
+    nums_channels = get_channel_counts(net.raw)
 
-    num_channels_uni = len(cn.edges)
+    num_channels_uni = len(net.raw.edges)
     pre_net_balance_stdev = math.sqrt(sum(x**2 for x in pre_net_balances) / len(pre_net_balances))
     pre_imbalance_stdev = math.sqrt(sum(x**2 for x in pre_imbalances) / len(pre_imbalances))
 
     # Simulation.
     failed, avg_length, avg_contacted, avg_fee = simulate_transfers(
-        cn, num_transfers, transfer_value, routing_model, execute_transfers
+        net.raw, num_transfers, transfer_value, routing_model, execute_transfers
     )
 
     # Post-simulation evaluation.
-    post_capacities = get_channel_capacities(cn)
-    post_net_balances = get_channel_net_balances(cn)
-    post_imbalances = get_channel_imbalances(cn)
+    post_capacities = get_channel_capacities(net.raw)
+    post_net_balances = get_channel_net_balances(net.raw)
+    post_imbalances = get_channel_imbalances(net.raw)
 
     post_net_balance_stdev = math.sqrt(
         sum(x**2 for x in post_net_balances) / len(post_net_balances)
@@ -88,7 +88,7 @@ def simulate_balancing(
         'Top row: initial network state',
         'Bottom row: after {} transfers'.format(num_transfers),
         '',
-        'Nodes: {}'.format(len(cn.nodes)),
+        'Nodes: {}'.format(len(net.raw.nodes)),
         'Channels: {}'.format(num_channels_uni // 2),
         'Transfers: {}'.format(num_transfers),
         '',
@@ -126,13 +126,13 @@ def simulate_balancing(
     os.makedirs(dirpath, exist_ok=True)
 
     fig.savefig(os.path.join(dirpath, 'stats'), bbox_inches='tight')
-    draw2d(cn, filepath=os.path.join(dirpath, 'network'))
-    draw2d(cn, heatmap_attr='num_transfers', filepath=os.path.join(dirpath, 'heatmap_transfers'))
-    draw2d(cn, heatmap_attr='net_balance', filepath=os.path.join(dirpath, 'heatmap_balance'))
+    net.draw(filepath=os.path.join(dirpath, 'network'))
+    net.draw(heatmap_attr='num_transfers', filepath=os.path.join(dirpath, 'heatmap_transfers'))
+    net.draw(heatmap_attr='net_balance', filepath=os.path.join(dirpath, 'heatmap_balance'))
 
 
 def simulate_transfers(
-        cn: ChannelNetwork,
+        raw: RawNetwork,
         num_transfers: int,
         value: int,
         routing_model: RoutingModel,
@@ -141,9 +141,9 @@ def simulate_transfers(
     """
     Perform transfers between random nodes.
     """
-    num_channels_uni = len(cn.edges)
+    num_channels_uni = len(raw.edges)
     print('Simulating {} transfers between {} nodes over {} bidirectional channels.'.format(
-        num_transfers, len(cn.nodes), num_channels_uni // 2
+        num_transfers, len(raw.nodes), num_channels_uni // 2
     ))
 
     failed = []
@@ -159,21 +159,21 @@ def simulate_transfers(
             subtic = toc
             print('Transfer {}/{}'.format(i + 1, num_transfers))
 
-        source, target = random.sample(cn.nodes, 2)
+        source, target = random.sample(raw.nodes, 2)
         # Repick nodes that cannot send transfers anymore.
-        while max(source.get_capacity(partner) for partner in source.partners) < value:
-            source, target = random.sample(cn.nodes, 2)
+        while max(e['capacity'] for e in raw[source].values()) < value:
+            source, target = random.sample(raw.nodes, 2)
 
-        path, path_history = routing_model.route(source, target, value)
+        path, path_history = routing_model.route(raw, source, target, value)
         if not path:
             print('No Path found from {} to {} that could sustain {} token(s).'.format(
                 source, target, value
             ))
             failed.append(i)
         else:
-            sum_fees += get_net_balance_fee(cn, path, value)
+            sum_fees += get_net_balance_fee(raw, path, value)
             if execute_transfers:
-                cn.do_transfer(path, value)
+                raw.do_transfer(path, value)
             sum_path_lengths += len(path)
             sum_contacted += len({node for subpath in path_history for node in subpath})
 
@@ -184,29 +184,29 @@ def simulate_transfers(
     return failed, sum_path_lengths/num_success, sum_contacted/num_success, sum_fees/num_success
 
 
-def get_net_balance_fee(cn: ChannelNetwork, path: Path, value: int) -> float:
+def get_net_balance_fee(raw: RawNetwork, path: Path, value: int) -> float:
     fee = 0
     for i in range(len(path) - 1):
         u = path[i]
         v = path[i + 1]
-        e = cn[u][v]
+        e = raw[u][v]
         fee += sigmoid(e['net_balance'] + value)
     return fee
 
 
-def get_channel_counts(cn: ChannelNetwork) -> List[int]:
-    return [len(node.partners) for node in cn.nodes]
+def get_channel_counts(raw: RawNetwork) -> List[int]:
+    return [len(raw[node]) for node in raw.nodes]
 
 
-def get_channel_capacities(cn: ChannelNetwork) -> List[float]:
-    return [a.get_capacity(b) for a, b in cn.edges]
+def get_channel_capacities(raw: RawNetwork) -> List[float]:
+    return [e['capacity'] for e in raw.edges.values()]
 
 
-def get_channel_net_balances(cn: ChannelNetwork) -> List[float]:
-    bi_edges = {frozenset({a, b}) for a, b in cn.edges}
-    return [abs(a.get_net_balance(b)) for a, b in bi_edges]
+def get_channel_net_balances(raw: RawNetwork) -> List[float]:
+    bi_edges = {frozenset({a, b}) for a, b in raw.edges}
+    return [abs(raw[a][b]['net_balance']) for a, b in bi_edges]
 
 
-def get_channel_imbalances(cn: ChannelNetwork) -> List[float]:
-    bi_edges = {frozenset({a, b}) for a, b in cn.edges}
-    return [abs(a.get_imbalance(b)) for a, b, in bi_edges]
+def get_channel_imbalances(raw: RawNetwork) -> List[float]:
+    bi_edges = {frozenset({a, b}) for a, b in raw.edges}
+    return [abs(raw[a][b]['imbalance']) for a, b in bi_edges]
