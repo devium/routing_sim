@@ -3,7 +3,7 @@ import pytest
 from raidensim.network.network import Network
 from raidensim.network.config import NetworkConfiguration
 from raidensim.network.dist import Distribution
-from raidensim.strategy.network_strategies import SimpleNetworkStrategy
+from raidensim.strategy.creation.join_strategy import SimpleJoinStrategy
 
 
 class DistinctDistribution(Distribution):
@@ -26,7 +26,7 @@ def network_2_nodes() -> Network:
         num_nodes=2,
         max_id=max_id,
         fullness_dist=DistinctDistribution(),
-        network_strategy=SimpleNetworkStrategy(
+        join_strategy=SimpleJoinStrategy(
             max_id=max_id,
             max_initiated_channels=(0, 1),
             deposit=(15, 20)

@@ -1,7 +1,24 @@
+from typing import Union, Iterable
+
 import math
 
 from raidensim.network.node import Node
-from raidensim.strategy.network_strategy import PositionStrategy
+
+
+class PositionStrategy(object):
+    def _map_node(self, node: Node):
+        raise NotImplementedError
+
+    def map(self, nodes: Union[Node, Iterable[Node]]):
+        if isinstance(nodes, Node):
+            return self._map_node(nodes)
+        elif isinstance(nodes, Iterable[Node]):
+            return {node: self._map_node(node) for node in nodes}
+        else:
+            raise ValueError
+
+    def distance(self, a: Node, b: Node):
+        raise NotImplementedError
 
 
 class RingPositionStrategy(PositionStrategy):

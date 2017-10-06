@@ -5,6 +5,6 @@ from raidensim.network.raw_network import RawNetwork
 from raidensim.types import Path
 
 
-class RoutingModel(object):
+class RoutingStrategy(object):
     def route(self, raw: RawNetwork, source: Node, target: Node, value: int) -> (Path, List[Path]):
         raise NotImplementedError

@@ -7,20 +7,25 @@ from raidensim.network.dist import (
     MicroRaidenDistribution,
     CircleDistribution
 )
-from raidensim.routing.global_routing_model import (
-    GlobalRoutingModel,
+from raidensim.strategy.routing.global_routing_strategy import (
+    GlobalRoutingStrategy,
     imbalance_fee_model,
     net_balance_fee_model,
     constant_fee_model
 )
-from raidensim.routing.next_hop_routing_model import NextHopRoutingModel
-from raidensim.routing.priority_models import (
-    DistancePriorityModel,
-    DistanceNetBalancePriorityModel,
-    GloballyAssistedPriorityModel)
+from raidensim.strategy.routing.next_hop.next_hop_routing_strategy import NextHopRoutingStrategy
+from raidensim.strategy.routing.next_hop.priority_strategy import (
+    DistancePriorityStrategy,
+    DistanceNetBalancePriorityStrategy
+)
+from raidensim.strategy.routing.next_hop.globally_assisted_priority_strategy import \
+    GloballyAssistedPriorityStrategy
 from raidensim.simulation import simulate_routing, simulate_balancing
 
-from raidensim.strategy.network_strategies import RaidenNetworkStrategy, MicroRaidenNetworkStrategy
+from raidensim.strategy.creation.join_strategy import (
+    RaidenRingJoinStrategy,
+    MicroRaidenJoinStrategy
+)
 
 SCRIPT_DIR = os.path.dirname(__file__)
 OUT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, '../out'))
@@ -35,7 +40,7 @@ NETWORK_CONFIG_RAIDEN_NETWORK = NetworkConfiguration(
     # fullness_dist=CircleDistribution(),
     # fullness_dist=ParetoDistribution(5, 0, 1),
     fullness_dist=BetaDistribution(0.5, 2),
-    network_strategy=RaidenNetworkStrategy(
+    join_strategy=RaidenRingJoinStrategy(
         max_id=MAX_ID,
         min_partner_deposit=0.2,
         max_distance=int(1/4 * MAX_ID),
@@ -53,7 +58,7 @@ NETWORK_CONFIG_MICRORAIDEN = NetworkConfiguration(
     # fullness_dist=BetaDistribution(0.95, CircleDistribution()),
     # fullness_dist=ParetoDistribution(0.95, CircleDistribution()),
     fullness_dist=MicroRaidenDistribution(0.95, CircleDistribution()),
-    network_strategy=MicroRaidenNetworkStrategy(
+    join_strategy=MicroRaidenJoinStrategy(
         max_id=MAX_ID,
         max_initiated_channels=(1, 3),
         deposit=10
@@ -66,18 +71,18 @@ def run():
     config = NETWORK_CONFIG_RAIDEN_NETWORK
     # config = NETWORK_CONFIG_MICRORAIDEN
 
-    position_strategy = config.network_strategy.position_strategy
+    position_strategy = config.join_strategy.position_strategy
 
     # Routing models.
-    constant_global_routing = GlobalRoutingModel(constant_fee_model)
-    net_balance_global_routing = GlobalRoutingModel(net_balance_fee_model)
-    imbalance_global_routing = GlobalRoutingModel(imbalance_fee_model)
-    distance_next_hop_routing = NextHopRoutingModel(DistancePriorityModel(position_strategy))
-    distance_net_balance_next_hop_routing = NextHopRoutingModel(
-        DistanceNetBalancePriorityModel(position_strategy)
+    constant_global_routing = GlobalRoutingStrategy(constant_fee_model)
+    net_balance_global_routing = GlobalRoutingStrategy(net_balance_fee_model)
+    imbalance_global_routing = GlobalRoutingStrategy(imbalance_fee_model)
+    distance_next_hop_routing = NextHopRoutingStrategy(DistancePriorityStrategy(position_strategy))
+    distance_net_balance_next_hop_routing = NextHopRoutingStrategy(
+        DistanceNetBalancePriorityStrategy(position_strategy)
     )
-    assisted_next_hop_routing = NextHopRoutingModel(
-        GloballyAssistedPriorityModel(position_strategy)
+    assisted_next_hop_routing = NextHopRoutingStrategy(
+        GloballyAssistedPriorityStrategy(position_strategy)
     )
 
     # Routing simulation + animation.

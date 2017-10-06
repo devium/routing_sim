@@ -1,5 +1,5 @@
 from raidensim.network.config import NetworkConfiguration
-from raidensim.routing.routing_model import RoutingModel
+from raidensim.strategy.routing.routing_strategy import RoutingStrategy
 
 
 class AnimationConfiguration:
@@ -7,7 +7,7 @@ class AnimationConfiguration:
             self,
             out_dir: str,
             network: NetworkConfiguration,
-            routing_model: RoutingModel,
+            routing_model: RoutingStrategy,
             popup_channels: bool,
             animation_length: float,
             transfer_hop_delay: float,

@@ -1,4 +1,4 @@
-from raidensim.strategy.network_strategy import PositionStrategy, NetworkStrategy
+from raidensim.strategy.creation.join_strategy import JoinStrategy
 from .dist import Distribution
 
 
@@ -8,9 +8,9 @@ class NetworkConfiguration(object):
             num_nodes: int,
             max_id: int,
             fullness_dist: Distribution,
-            network_strategy: NetworkStrategy
+            join_strategy: JoinStrategy
     ):
         self.num_nodes = num_nodes
         self.max_id = max_id
         self.fullness_dist = fullness_dist
-        self.network_strategy = network_strategy
+        self.join_strategy = join_strategy

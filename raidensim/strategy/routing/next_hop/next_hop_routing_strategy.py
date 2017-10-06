@@ -3,28 +3,15 @@ from typing import List
 
 from raidensim.network.node import Node
 from raidensim.network.raw_network import RawNetwork
-from raidensim.routing.routing_model import RoutingModel
+from raidensim.strategy.routing.next_hop.priority_strategy import PriorityStrategy
+from raidensim.strategy.routing.routing_strategy import RoutingStrategy
 from raidensim.types import Path
 
 
-class PriorityModel(object):
-    def priority(
-            self,
-            raw: RawNetwork,
-            source: Node,
-            u: Node,
-            v: Node,
-            e: dict,
-            target: Node,
-            value: int
-    ) -> float:
-        raise NotImplementedError
-
-
-class NextHopRoutingModel(RoutingModel):
+class NextHopRoutingStrategy(RoutingStrategy):
     def __init__(
             self,
-            priority_model: PriorityModel,
+            priority_model: PriorityStrategy,
             max_paths=10000
     ):
         self.priority_model = priority_model

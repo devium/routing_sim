@@ -4,15 +4,19 @@ from raidensim.animation.animation_generator import AnimationGenerator
 from raidensim.animation.config import AnimationConfiguration
 from raidensim.network.config import NetworkConfiguration
 from raidensim.network.dist import (
-    CircleDistribution,
     ParetoDistribution,
     BetaDistribution,
-    MicroRaidenDistribution
+    MicroRaidenDistribution,
+    CircleDistribution
 )
-from raidensim.routing.next_hop_routing_model import NextHopRoutingModel
-from raidensim.routing.priority_models import DistancePriorityModel
-from raidensim.strategy.network_strategies import RaidenNetworkStrategy, MicroRaidenNetworkStrategy
-from raidensim.strategy.position_strategies import RingPositionStrategy
+
+from raidensim.strategy.creation.join_strategy import (
+    RaidenRingJoinStrategy,
+    MicroRaidenJoinStrategy
+)
+from raidensim.strategy.position_strategy import RingPositionStrategy
+from raidensim.strategy.routing.next_hop.next_hop_routing_strategy import NextHopRoutingStrategy
+from raidensim.strategy.routing.next_hop.priority_strategy import DistancePriorityStrategy
 
 MAX_ID = 2**32
 
@@ -22,7 +26,7 @@ NETWORK_CONFIG_RAIDEN_NETWORK = NetworkConfiguration(
     fullness_dist=CircleDistribution(),
     # fullness_dist=ParetoDistribution(5, 0, 1),
     # fullness_dist=BetaDistribution(0.5, 2),
-    network_strategy=RaidenNetworkStrategy(
+    join_strategy=RaidenRingJoinStrategy(
         max_id = MAX_ID,
         min_partner_deposit=0.2,
         max_distance=int(1/4 * MAX_ID),
@@ -37,7 +41,7 @@ NETWORK_CONFIG_MICRORAIDEN = NetworkConfiguration(
     num_nodes=200,
     max_id=MAX_ID,
     fullness_dist=MicroRaidenDistribution(0.95, CircleDistribution()),
-    network_strategy=MicroRaidenNetworkStrategy(
+    join_strategy=MicroRaidenJoinStrategy(
         max_id=MAX_ID,
         max_initiated_channels=(1, 3),
         deposit=10
@@ -50,7 +54,7 @@ OUT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, '../blender/data'))
 ANIMATION_CONFIG = AnimationConfiguration(
     out_dir=OUT_DIR,
     network=NETWORK_CONFIG_RAIDEN_NETWORK,
-    routing_model=NextHopRoutingModel(DistancePriorityModel(RingPositionStrategy(MAX_ID))),
+    routing_model=NextHopRoutingStrategy(DistancePriorityStrategy(RingPositionStrategy(MAX_ID))),
     popup_channels=True,
     animation_length=5,
     transfer_hop_delay=0.2,

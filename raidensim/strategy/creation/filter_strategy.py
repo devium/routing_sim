@@ -5,8 +5,13 @@ import math
 
 from raidensim.network.node import Node
 from raidensim.network.raw_network import RawNetwork
-from raidensim.strategy.network_strategy import FilterStrategy, PositionStrategy
+from raidensim.strategy.position_strategy import PositionStrategy
 from raidensim.types import Fullness
+
+
+class FilterStrategy(object):
+    def filter(self, raw: RawNetwork, a: Node, b: Node) -> bool:
+        raise NotImplementedError
 
 
 class IdentityFilterStrategy(FilterStrategy):

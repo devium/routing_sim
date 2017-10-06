@@ -13,7 +13,7 @@ import shutil
 from raidensim.network.config import NetworkConfiguration
 from raidensim.network.network import Network
 from raidensim.network.raw_network import RawNetwork
-from raidensim.routing.routing_model import RoutingModel
+from raidensim.strategy.routing.routing_strategy import RoutingStrategy
 from raidensim.types import Path
 from raidensim.util import sigmoid
 
@@ -23,7 +23,7 @@ def simulate_balancing(
         out_dir,
         num_transfers: int,
         transfer_value: int,
-        routing_model: RoutingModel,
+        routing_model: RoutingStrategy,
         name: str,
         execute_transfers=True
 ):
@@ -135,7 +135,7 @@ def simulate_transfers(
         raw: RawNetwork,
         num_transfers: int,
         value: int,
-        routing_model: RoutingModel,
+        routing_model: RoutingStrategy,
         execute_transfers: bool
 ) -> (List[int], float, float, float):
     """

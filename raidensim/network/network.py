@@ -28,7 +28,7 @@ class Network(object):
             if toc - tic > 5:
                 tic = toc
                 print('Connecting node {}/{}'.format(i, len(self.raw.nodes)))
-            self.config.network_strategy.connect(self.raw, node)
+            self.config.join_strategy.join(self.raw, node)
 
     def _calc_sector_angles(self, center, width):
         # Start angle and end angle.
@@ -49,7 +49,7 @@ class Network(object):
         from matplotlib.patches import Wedge
         edge_color = '#eeeeee'
 
-        pos = self.config.network_strategy.position_strategy.map(self.raw.nodes)
+        pos = self.config.join_strategy.position_strategy.map(self.raw.nodes)
 
         plt.clf()
         fig = plt.gcf()

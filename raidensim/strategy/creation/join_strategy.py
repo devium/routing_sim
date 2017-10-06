@@ -1,25 +1,64 @@
 import random
+from typing import Callable
 
-from raidensim.strategy.connection_strategies import BidirectionalConnectionStrategy
-from raidensim.strategy.filter_strategies import (
+from raidensim.network.node import Node
+from raidensim.network.raw_network import RawNetwork
+from raidensim.strategy.creation.filter_strategy import (
     IdentityFilterStrategy,
+    NotConnectedFilterStrategy,
+    MicroRaidenServerFilterStrategy,
     DistanceFilterStrategy,
     FullerFilterStrategy,
-    MinIncomingDepositFilterStrategy,
-    MicroRaidenServerFilterStrategy,
-    NotConnectedFilterStrategy,
     AcceptedLimitsFilterStrategy,
-    KademliaFilterStrategy,
-    MinMutualDepositFilterStrategy
+    MinIncomingDepositFilterStrategy
 )
-from raidensim.strategy.network_strategy import NetworkStrategy
-from raidensim.strategy.position_strategies import RingPositionStrategy
-from raidensim.strategy.selection_strategies import KademliaSelectionStrategy, \
+from raidensim.strategy.position_strategy import PositionStrategy, RingPositionStrategy
+from .connection_strategy import ConnectionStrategy, BidirectionalConnectionStrategy
+from .selection_strategy import (
+    SelectionStrategy,
+    KademliaSelectionStrategy,
     RandomSelectionStrategy
+)
 from raidensim.types import Fullness, IntRange
 
 
-class SimpleNetworkStrategy(NetworkStrategy):
+class JoinStrategy(object):
+    def join(self, raw: RawNetwork, node: Node):
+        raise NotImplementedError
+
+
+class DefaultJoinStrategy(JoinStrategy):
+    def __init__(
+            self,
+            initiated_channels_mapping: Callable[[Fullness], int],
+            selection_strategy: SelectionStrategy,
+            connection_strategy: ConnectionStrategy,
+            position_strategy: PositionStrategy
+    ):
+        self.initiated_channels_mapping = initiated_channels_mapping
+        self.selection_strategy = selection_strategy
+        self.connection_strategy = connection_strategy
+        self.position_strategy = position_strategy
+
+    def join(self, raw: RawNetwork, node: Node):
+        max_initiated_channels = self.initiated_channels_mapping(node.fullness)
+        targets = None
+        if node['num_initiated_channels'] < max_initiated_channels:
+            targets = self.selection_strategy.targets(raw, node)
+
+        try:
+            while node['num_initiated_channels'] < max_initiated_channels:
+                target = next(targets)
+                self.connection_strategy.connect(raw, node, target)
+        except StopIteration:
+            print('Out of suitable nodes for {}. {}/{} connections unfulfilled'.format(
+                node,
+                max_initiated_channels - node['num_initiated_channels'],
+                max_initiated_channels
+            ))
+
+
+class SimpleJoinStrategy(DefaultJoinStrategy):
     def __init__(
             self,
             max_id: int,
@@ -37,7 +76,7 @@ class SimpleNetworkStrategy(NetworkStrategy):
             NotConnectedFilterStrategy()
         ]
 
-        NetworkStrategy.__init__(
+        DefaultJoinStrategy.__init__(
             self,
             initiated_channels_mapping=initiated_channels_mapping,
             selection_strategy=RandomSelectionStrategy(filter_strategies=filter_strategies),
@@ -50,7 +89,7 @@ class SimpleNetworkStrategy(NetworkStrategy):
         return int((max_ - min_) * fullness + min_)
 
 
-class RaidenNetworkStrategy(NetworkStrategy):
+class RaidenRingJoinStrategy(DefaultJoinStrategy):
     def __init__(
             self,
             max_id: int,
@@ -90,7 +129,7 @@ class RaidenNetworkStrategy(NetworkStrategy):
 
         # selection_strategy = RandomSelectionStrategy(filter_strategies=filter_strategies)
 
-        NetworkStrategy.__init__(
+        DefaultJoinStrategy.__init__(
             self,
             initiated_channels_mapping=initiated_channels_mapping,
             selection_strategy=selection_strategy,
@@ -107,7 +146,7 @@ class RaidenNetworkStrategy(NetworkStrategy):
         return (max_ - min_) * fullness + min_
 
 
-class MicroRaidenNetworkStrategy(NetworkStrategy):
+class MicroRaidenJoinStrategy(DefaultJoinStrategy):
     def __init__(
             self,
             max_id: int,
@@ -133,7 +172,7 @@ class MicroRaidenNetworkStrategy(NetworkStrategy):
             filter_strategies=filter_strategies
         )
 
-        NetworkStrategy.__init__(
+        DefaultJoinStrategy.__init__(
             self,
             initiated_channels_mapping=initiated_channels_mapping,
             selection_strategy=selection_strategy,

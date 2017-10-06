@@ -5,11 +5,12 @@ import random
 from collections import namedtuple
 from typing import List
 
+import math
+
 from raidensim.network.network import Network
 from raidensim.network.node import Node
-from raidensim.strategy.network_strategies import MicroRaidenNetworkStrategy
+from raidensim.strategy.creation.join_strategy import MicroRaidenJoinStrategy
 from raidensim.tools.curve_editor import CurveEditor
-from raidensim.tools.draw import calc3d_positions
 from .config import AnimationConfiguration
 
 
@@ -94,11 +95,7 @@ class AnimationGenerator(object):
         self.net = Network(self.config.network)
         self.node_to_index = {node: index for index, node in enumerate(self.net.raw.nodes)}
 
-        node_pos, self.channels = calc3d_positions(
-            self.net,
-            self.config.top_hole_radius,
-            dist_pdf=self.config.network.fullness_dist.get_pdf()
-        )
+        node_pos, self.channels = self.calc3d_positions()
         self.channel_to_index = {frozenset(c): i for i, c in enumerate(self.channels)}
         channels_indexed = [
             (self.node_to_index[a], self.node_to_index[b]) for a, b in self.channels
@@ -109,6 +106,42 @@ class AnimationGenerator(object):
                 'nodes': node_pos,
                 'channels': channels_indexed
             }, network_file, indent=2)
+
+    def calc3d_positions(self):
+        """"
+        Helper to position nodes in 3d.
+        Nodes are again distributed on rings, their address determining the position on that ring.
+        The fuller nodes are (more channels, higher deposits) the higher these nodes are positioned.
+        The dist_pdf is expected to be the fullness probability-density function so that nodes are
+        evenly distributed on a surface that corresponds to their fullness distribution.
+        """
+        positions = []
+        max_fullness = max(n.fullness for n in self.net.raw.nodes)
+        min_fullness = min(n.fullness for n in self.net.raw.nodes)
+        dist_pdf = self.config.network.fullness_dist.get_pdf()
+        pdf_scale = 1.0 / max(
+            dist_pdf([n.fullness for n in self.net.raw.nodes])
+        )
+        range_ = float(max_fullness - min_fullness)
+
+        for node in self.net.raw.nodes:
+            # Put x,y on circle of radius 1.
+            rad = 2 * math.pi * node.uid / self.net.config.max_id
+            x, y = math.sin(rad), math.cos(rad)
+
+            # Height above ground (light client =~0, full node up to 1).
+            h = (node.fullness - min_fullness) / range_
+
+            # Adjust radius to evenly distribute nodes on the 3D surface.
+            r = dist_pdf(h) * pdf_scale
+            # Make hole at top by moving higher nodes out a bit (min radius = hole_radius).
+            r = (1 - self.config.top_hole_radius) * r + self.config.top_hole_radius
+            x *= r
+            y *= r
+            positions.append([x, y, h])
+
+        bi_edges = {frozenset({a, b}) for a, b in self.net.raw.edges}
+        return positions, list(bi_edges)
 
     def reset_network(self):
         # Revert simulation back to an edgeless network. Build animations from there.
@@ -221,7 +254,7 @@ class AnimationGenerator(object):
 
     def create_transfer(self):
         for i in range(self.config.transfer_attempts_max):
-            if isinstance(self.config.network.network_strategy, MicroRaidenNetworkStrategy):
+            if isinstance(self.config.network.join_strategy, MicroRaidenJoinStrategy):
                 channel = random.sample(self.visible_channels, 1)
                 if channel:
                     self.flash_route(list(channel[0]))

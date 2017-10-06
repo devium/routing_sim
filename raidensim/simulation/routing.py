@@ -7,8 +7,8 @@ import shutil
 import os
 
 from raidensim.network.network import Network
-from raidensim.routing.routing_model import RoutingModel
-from raidensim.strategy.filter_strategies import KademliaFilterStrategy
+from raidensim.strategy.routing.routing_strategy import RoutingStrategy
+from raidensim.strategy.creation.filter_strategy import KademliaFilterStrategy
 from raidensim.network.config import NetworkConfiguration
 
 
@@ -18,7 +18,7 @@ def simulate_routing(
         num_sample_nodes: int,
         num_paths: int,
         value: int,
-        routing_models: List[RoutingModel],
+        routing_models: List[RoutingStrategy],
         max_gif_frames=20
 ):
     # Setup network.
@@ -42,7 +42,7 @@ def simulate_routing(
 
     try:
         kademlia_filter = next(
-            filter_ for filter_ in config.network_strategy.selection_strategy.filter_strategies
+            filter_ for filter_ in config.join_strategy.selection_strategy.filter_strategies
             if isinstance(filter_, KademliaFilterStrategy)
         )
     except StopIteration:

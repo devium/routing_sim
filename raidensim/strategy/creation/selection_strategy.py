@@ -5,9 +5,20 @@ from typing import Iterable
 
 import math
 
-from raidensim.network.raw_network import RawNetwork
 from raidensim.network.node import Node
-from raidensim.strategy.network_strategy import SelectionStrategy, PositionStrategy
+from raidensim.network.raw_network import RawNetwork
+from .filter_strategy import FilterStrategy
+
+
+class SelectionStrategy(object):
+    def __init__(self, filter_strategies: Iterable[FilterStrategy]):
+        self.filter_strategies = filter_strategies
+
+    def match(self, raw: RawNetwork, a: Node, b: Node):
+        return all(filter_strategy.filter(raw, a, b) for filter_strategy in self.filter_strategies)
+
+    def targets(self, raw: RawNetwork, node: Node) -> Iterable[Node]:
+        raise NotImplementedError
 
 
 class CachedNetworkSelectionStrategy(SelectionStrategy):
