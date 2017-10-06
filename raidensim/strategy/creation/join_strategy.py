@@ -1,6 +1,7 @@
 import random
 from typing import Callable
 
+from raidensim.network.lattice import Lattice
 from raidensim.network.node import Node
 from raidensim.network.raw_network import RawNetwork
 from raidensim.strategy.creation.filter_strategy import (
@@ -177,5 +178,16 @@ class MicroRaidenJoinStrategy(DefaultJoinStrategy):
             initiated_channels_mapping=initiated_channels_mapping,
             selection_strategy=selection_strategy,
             connection_strategy=BidirectionalConnectionStrategy(deposit_mapping),
-            position_strategy = RingPositionStrategy(max_id)
+            position_strategy=RingPositionStrategy(max_id)
         )
+
+
+class RaidenLatticeJoinStrategy(JoinStrategy):
+    def __init__(self, lattice: Lattice, connection_strategy: ConnectionStrategy,):
+        self.lattice = lattice
+        self.connection_strategy = connection_strategy
+
+    def join(self, raw: RawNetwork, node: Node):
+        coord = self.lattice.get_free_coord()
+        for partner in self.lattice.coord_neighbors(*coord):
+            self.connection_strategy.connect(raw, node, partner)

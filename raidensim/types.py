@@ -7,3 +7,4 @@ Reason = str
 IntRange = Tuple[int, int]
 FloatRange = Tuple[float, float]
 Path = List[Node]
+Coord = Tuple[int, int]

@@ -1,23 +1,24 @@
 import bisect
 import random
 from itertools import cycle
-from typing import Iterable
+from typing import Iterator
 
 import math
 
+from raidensim.network.lattice import Lattice
 from raidensim.network.node import Node
 from raidensim.network.raw_network import RawNetwork
 from .filter_strategy import FilterStrategy
 
 
 class SelectionStrategy(object):
-    def __init__(self, filter_strategies: Iterable[FilterStrategy]):
+    def __init__(self, filter_strategies: Iterator[FilterStrategy]):
         self.filter_strategies = filter_strategies
 
     def match(self, raw: RawNetwork, a: Node, b: Node):
         return all(filter_strategy.filter(raw, a, b) for filter_strategy in self.filter_strategies)
 
-    def targets(self, raw: RawNetwork, node: Node) -> Iterable[Node]:
+    def targets(self, raw: RawNetwork, node: Node) -> Iterator[Node]:
         raise NotImplementedError
 
 
@@ -46,7 +47,7 @@ class CachedNetworkSelectionStrategy(SelectionStrategy):
         self.node_ids_sorted = sorted(node.uid for node in raw.nodes)
         self.cached_raw = raw
 
-    def targets(self, raw: RawNetwork, node: Node) -> Iterable[Node]:
+    def targets(self, raw: RawNetwork, node: Node) -> Iterator[Node]:
         raise NotImplementedError
 
 
@@ -80,7 +81,7 @@ class KademliaSelectionStrategy(CachedNetworkSelectionStrategy):
     def _ring_distance(self, a: int, b: int):
         return min((a - b) % self.max_id, (b - a) % self.max_id)
 
-    def targets(self, raw: RawNetwork, node: Node) -> Iterable[Node]:
+    def targets(self, raw: RawNetwork, node: Node) -> Iterator[Node]:
         self._update_network_cache(raw)
         distances = cycle(self.distances)
         while True:
@@ -128,7 +129,7 @@ class KademliaSelectionStrategy(CachedNetworkSelectionStrategy):
 
 
 class RandomSelectionStrategy(CachedNetworkSelectionStrategy):
-    def targets(self, raw: RawNetwork, node: Node) -> Iterable[Node]:
+    def targets(self, raw: RawNetwork, node: Node) -> Iterator[Node]:
         self._update_network_cache(raw)
         for other in self.nodes:
             if self.match(raw, node, other):
