@@ -125,10 +125,21 @@ class TotalLimitsFilterStrategy(FilterStrategy):
         self.max_total_channels_mapping = max_total_channels_mapping
 
     def filter(self, raw: RawNetwork, a: Node, b: Node):
-        max_total_channels = self.max_total_channels_mapping(b.fullness)
-        num_incoming_channels = b['num_incoming_channels']
-        num_outgoing_channels = b['num_outgoing_channels']
-        return num_incoming_channels + num_outgoing_channels < max_total_channels
+        a_max_total_channels = self.max_total_channels_mapping(a.fullness)
+        b_max_total_channels = self.max_total_channels_mapping(b.fullness)
+        return a['num_incoming_channels'] + a['num_outgoing_channels'] < a_max_total_channels and \
+               b['num_incoming_channels'] + b['num_outgoing_channels'] < b_max_total_channels
+
+
+class TotalBidirectionalLimitsFilterStrategy(TotalLimitsFilterStrategy):
+    """
+    Only allows a total number of bidirectional channels for a node, regardless of initiator.
+    """
+    def __init__(self, max_total_channels_mapping: Callable[[Fullness], int]):
+        TotalLimitsFilterStrategy.__init__(
+            self,
+            lambda fullness: max_total_channels_mapping(fullness) * 2
+        )
 
 
 class ThresholdFilterStrategy(FilterStrategy):

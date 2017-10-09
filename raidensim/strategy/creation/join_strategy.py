@@ -11,10 +11,11 @@ from raidensim.strategy.creation.filter_strategy import (
     DistanceFilterStrategy,
     FullerFilterStrategy,
     AcceptedLimitsFilterStrategy,
-    MinIncomingDepositFilterStrategy
-)
+    MinIncomingDepositFilterStrategy,
+    TotalLimitsFilterStrategy, TotalBidirectionalLimitsFilterStrategy)
 from raidensim.strategy.position_strategy import PositionStrategy, RingPositionStrategy
-from .connection_strategy import ConnectionStrategy, BidirectionalConnectionStrategy
+from .connection_strategy import ConnectionStrategy, BidirectionalConnectionStrategy, \
+    LatticeConnectionStrategy
 from .selection_strategy import (
     SelectionStrategy,
     KademliaSelectionStrategy,
@@ -178,16 +179,36 @@ class MicroRaidenJoinStrategy(DefaultJoinStrategy):
 
 
 class RaidenLatticeJoinStrategy(JoinStrategy):
-    def __init__(self, lattice: Lattice, deposit: IntRange):
+    def __init__(self, lattice: Lattice, num_shortcut_channels: IntRange, deposit: IntRange):
         self.lattice = lattice
 
         def deposit_mapping(fullness: Fullness):
             return linear_int(*deposit, fullness)
 
+        def shortcut_mapping(fullness: Fullness):
+            return linear_int(*num_shortcut_channels, fullness)
+
+        filter_strategies = [
+            IdentityFilterStrategy(),
+            NotConnectedFilterStrategy(),
+            TotalBidirectionalLimitsFilterStrategy(shortcut_mapping)
+        ]
+
+        self.shortcut_mapping = shortcut_mapping
+        self.selection_strategy = RandomSelectionStrategy(filter_strategies=filter_strategies)
         self.connection_strategy = BidirectionalConnectionStrategy(deposit_mapping)
+        self.lattice_connection_strategy = LatticeConnectionStrategy(deposit_mapping)
 
     def join(self, raw: RawNetwork, node: Node):
         coord = self.lattice.get_free_coord()
         self.lattice.add_node(node, *coord)
-        for partner in self.lattice.coord_neighbors(*coord):
-            self.connection_strategy.connect(raw, node, partner)
+        neighbors = list(self.lattice.coord_neighbors(*coord))
+        neighbors = [neighbor for neighbor in neighbors if (node, neighbor) not in raw.edges]
+        for partner in neighbors:
+            self.lattice_connection_strategy.connect(raw, node, partner)
+        try:
+            for i in range(self.shortcut_mapping(node.fullness)):
+                partner = next(self.selection_strategy.targets(raw, node))
+                self.connection_strategy.connect(raw, node, partner)
+        except StopIteration:
+            pass

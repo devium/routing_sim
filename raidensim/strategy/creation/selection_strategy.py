@@ -131,6 +131,8 @@ class KademliaSelectionStrategy(CachedNetworkSelectionStrategy):
 class RandomSelectionStrategy(CachedNetworkSelectionStrategy):
     def targets(self, raw: RawNetwork, node: Node) -> Iterator[Node]:
         self._update_network_cache(raw)
-        for other in self.nodes:
+        i_start = random.randint(0, len(self.nodes) - 1)
+        for i in range(i_start, i_start + len(self.nodes)):
+            other = self.nodes[i % len(self.nodes)]
             if self.match(raw, node, other):
                 yield other

@@ -92,7 +92,7 @@ class Network(object):
 
         if draw_labels:
             labels = {node: node.uid for node in self.raw.nodes}
-            nx.draw_networkx_labels(self.raw, pos, labels, font_size=6)
+            nx.draw_networkx_labels(self.raw, pos, labels, font_size=5)
 
         if highlighted_nodes:
             colors = cycle(['r', 'b', 'c', 'g'])
