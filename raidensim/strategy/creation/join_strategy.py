@@ -19,8 +19,8 @@ from .connection_strategy import ConnectionStrategy, BidirectionalConnectionStra
 from .selection_strategy import (
     SelectionStrategy,
     KademliaSelectionStrategy,
-    RandomSelectionStrategy
-)
+    RandomSelectionStrategy,
+    RandomExcludingSelectionStrategy)
 from raidensim.types import Fullness, IntRange
 
 
@@ -194,8 +194,15 @@ class RaidenLatticeJoinStrategy(JoinStrategy):
             TotalBidirectionalLimitsFilterStrategy(shortcut_mapping)
         ]
 
+        def exclusion_criterion(raw: RawNetwork, node: Node):
+            max_channels = shortcut_mapping(node.fullness) * 2
+            return node['num_incoming_channels'] + node['num_outgoing_channels'] >= max_channels
+
         self.shortcut_mapping = shortcut_mapping
-        self.selection_strategy = RandomSelectionStrategy(filter_strategies=filter_strategies)
+        self.selection_strategy = RandomExcludingSelectionStrategy(
+            filter_strategies=filter_strategies,
+            exclusion_criteria=[exclusion_criterion]
+        )
         self.connection_strategy = BidirectionalConnectionStrategy(deposit_mapping)
         self.lattice_connection_strategy = LatticeConnectionStrategy(deposit_mapping)
 

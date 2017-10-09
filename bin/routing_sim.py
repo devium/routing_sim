@@ -40,7 +40,7 @@ LATTICE = Lattice()
 POSITION_STRATEGY = LatticePositionStrategy(LATTICE)
 
 NETWORK_CONFIG_RAIDEN_NETWORK = NetworkConfiguration(
-    num_nodes=900,
+    num_nodes=10000,
     max_id=MAX_ID,
     # fullness_dist=CircleDistribution(),
     # fullness_dist=ParetoDistribution(5, 0, 1),

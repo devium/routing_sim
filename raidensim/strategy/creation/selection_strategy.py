@@ -1,11 +1,10 @@
 import bisect
 import random
 from itertools import cycle
-from typing import Iterator
+from typing import Iterator, Callable
 
 import math
 
-from raidensim.network.lattice import Lattice
 from raidensim.network.node import Node
 from raidensim.network.raw_network import RawNetwork
 from .filter_strategy import FilterStrategy
@@ -26,8 +25,8 @@ class CachedNetworkSelectionStrategy(SelectionStrategy):
     """
     Maintains a sorted cache of all node IDs and a mapping from node ID to Node.
     """
-    def __init__(self, **kwargs):
-        SelectionStrategy.__init__(self, **kwargs)
+    def __init__(self, filter_strategies: Iterator[FilterStrategy]):
+        SelectionStrategy.__init__(self, filter_strategies)
 
         # Cached network information.
         self.cached_raw = None
@@ -36,8 +35,8 @@ class CachedNetworkSelectionStrategy(SelectionStrategy):
         self.node_id_to_node = {}
 
     def _update_network_cache(self, raw: RawNetwork):
-        # Best guess on an up-to-date cache. Not an issue with constant-node networks.
-        if len(self.nodes) == len(raw.nodes) and self.cached_raw == raw:
+        # Not an issue with constant-node networks.
+        if self.cached_raw == raw:
             return
 
         # Nodes shuffled for easy random sampling.
@@ -71,10 +70,11 @@ class KademliaSelectionStrategy(CachedNetworkSelectionStrategy):
             self,
             max_id: int,
             max_distance: int,
-            skip: int, **kwargs
+            skip: int,
+            filter_strategies: Iterator[FilterStrategy]
     ):
         self.max_id = max_id
-        CachedNetworkSelectionStrategy.__init__(self, **kwargs)
+        CachedNetworkSelectionStrategy.__init__(self, filter_strategies)
         targets_per_cycle = int(math.log(max_distance, 2)) + 1
         self.distances = [int(2 ** i) for i in range(skip, targets_per_cycle)]
 
@@ -136,3 +136,42 @@ class RandomSelectionStrategy(CachedNetworkSelectionStrategy):
             other = self.nodes[i % len(self.nodes)]
             if self.match(raw, node, other):
                 yield other
+
+
+class RandomExcludingSelectionStrategy(RandomSelectionStrategy):
+    """
+    Faster version of a random selection strategy that removes nodes from the local cache that pass
+    any exclusion criteria. For example: permanently exclude nodes that have reached their maximum
+    channel count.
+
+    Exclusions can be reset in case a node becomes available again.
+    """
+    def __init__(
+            self,
+            filter_strategies: Iterator[FilterStrategy],
+            exclusion_criteria: Iterator[Callable[[RawNetwork, Node], bool]]
+    ):
+        RandomSelectionStrategy.__init__(self, filter_strategies)
+        self.exclusion_criteria = exclusion_criteria
+        self.pending_excludes = []
+
+    def targets(self, raw: RawNetwork, node: Node) -> Iterator[Node]:
+        self._update_network_cache(raw)
+        for exclude in reversed(sorted(self.pending_excludes)):
+            del self.nodes[exclude]
+        self.pending_excludes.clear()
+
+        if any(exclude(raw, node) for exclude in self.exclusion_criteria) or not self.nodes:
+            return
+
+        i_start = random.randint(0, len(self.nodes) - 1)
+        for i in range(i_start, i_start + len(self.nodes)):
+            other = self.nodes[i % len(self.nodes)]
+            if any(exclude(raw, other) for exclude in self.exclusion_criteria):
+                self.pending_excludes.append(i % len(self.nodes))
+            elif self.match(raw, node, other):
+                yield other
+
+    def reset_exclusions(self):
+        # Trigger cache rebuild next time.
+        self.cached_raw = None
