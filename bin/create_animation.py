@@ -19,6 +19,7 @@ from raidensim.strategy.routing.next_hop.next_hop_routing_strategy import NextHo
 from raidensim.strategy.routing.next_hop.priority_strategy import DistancePriorityStrategy
 
 MAX_ID = 2**32
+POSITION_STRATEGY = RingPositionStrategy(MAX_ID)
 
 NETWORK_CONFIG_RAIDEN_NETWORK = NetworkConfiguration(
     num_nodes=200,
@@ -26,9 +27,11 @@ NETWORK_CONFIG_RAIDEN_NETWORK = NetworkConfiguration(
     fullness_dist=CircleDistribution(),
     # fullness_dist=ParetoDistribution(5, 0, 1),
     # fullness_dist=BetaDistribution(0.5, 2),
+    position_strategy=POSITION_STRATEGY,
     join_strategy=RaidenRingJoinStrategy(
         max_id = MAX_ID,
         min_partner_deposit=0.2,
+        position_strategy=POSITION_STRATEGY,
         max_distance=int(1/4 * MAX_ID),
         kademlia_skip=22,
         max_initiated_channels=(4, 10),
@@ -41,6 +44,7 @@ NETWORK_CONFIG_MICRORAIDEN = NetworkConfiguration(
     num_nodes=200,
     max_id=MAX_ID,
     fullness_dist=MicroRaidenDistribution(0.95, CircleDistribution()),
+    position_strategy=POSITION_STRATEGY,
     join_strategy=MicroRaidenJoinStrategy(
         max_id=MAX_ID,
         max_initiated_channels=(1, 3),

@@ -113,7 +113,7 @@ class Lattice(object):
             else:
                 display += '  '
             for x in range(self.min_x, self.max_x + 1, 1):
-                display += 'X' if (x,y) in self.coord_to_node else 'O'
+                display += 'X' if (x, y) in self.coord_to_node else 'O'
             display += '\n'
 
         if self.min_x <= 0:

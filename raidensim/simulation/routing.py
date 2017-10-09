@@ -7,6 +7,7 @@ import shutil
 import os
 
 from raidensim.network.network import Network
+from raidensim.strategy.creation.join_strategy import DefaultJoinStrategy
 from raidensim.strategy.routing.routing_strategy import RoutingStrategy
 from raidensim.strategy.creation.filter_strategy import KademliaFilterStrategy
 from raidensim.network.config import NetworkConfiguration
@@ -41,10 +42,13 @@ def simulate_routing(
         print('Plotting sample node connectivity.')
 
     try:
-        kademlia_filter = next(
-            filter_ for filter_ in config.join_strategy.selection_strategy.filter_strategies
-            if isinstance(filter_, KademliaFilterStrategy)
-        )
+        if isinstance(config.join_strategy, DefaultJoinStrategy):
+            kademlia_filter = next(
+                filter_ for filter_ in config.join_strategy.selection_strategy.filter_strategies
+                if isinstance(filter_, KademliaFilterStrategy)
+            )
+        else:
+            kademlia_filter = None
     except StopIteration:
         kademlia_filter = None
 

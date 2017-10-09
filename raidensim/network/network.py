@@ -2,6 +2,7 @@ import time
 from itertools import cycle
 from typing import List, Tuple
 import matplotlib.pyplot as plt
+from matplotlib.patches import Wedge
 import networkx as nx
 import os
 
@@ -46,10 +47,9 @@ class Network(object):
             heatmap_attr: str=None,
             filepath: str=None
     ):
-        from matplotlib.patches import Wedge
         edge_color = '#eeeeee'
 
-        pos = self.config.join_strategy.position_strategy.map(self.raw.nodes)
+        pos = self.config.position_strategy.map(self.raw.nodes)
 
         plt.clf()
         fig = plt.gcf()

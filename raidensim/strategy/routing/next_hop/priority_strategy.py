@@ -59,5 +59,3 @@ class DistanceNetBalancePriorityStrategy(PriorityStrategy):
         distance = self.position_strategy.distance(v, target)
         fee = sigmoid(e['net_balance'] + value)
         return distance * fee
-
-

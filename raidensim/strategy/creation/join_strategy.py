@@ -23,6 +23,14 @@ from .selection_strategy import (
 from raidensim.types import Fullness, IntRange
 
 
+def linear_int(min_: int, max_: int, fullness: float) -> int:
+    return int((max_ - min_) * fullness + min_)
+
+
+def linear_float(min_: float, max_: float, fullness: float) -> float:
+    return (max_ - min_) * fullness + min_
+
+
 class JoinStrategy(object):
     def join(self, raw: RawNetwork, node: Node):
         raise NotImplementedError
@@ -67,10 +75,10 @@ class SimpleJoinStrategy(DefaultJoinStrategy):
             deposit: IntRange
     ):
         def initiated_channels_mapping(fullness: Fullness):
-            return self._linear(*max_initiated_channels, fullness)
+            return linear_int(*max_initiated_channels, fullness)
 
         def deposit_mapping(fullness: Fullness):
-            return self._linear(*deposit, fullness)
+            return linear_int(*deposit, fullness)
 
         filter_strategies = [
             IdentityFilterStrategy(),
@@ -85,16 +93,13 @@ class SimpleJoinStrategy(DefaultJoinStrategy):
             position_strategy=RingPositionStrategy(max_id)
         )
 
-    @staticmethod
-    def _linear(min_: int, max_: int, fullness: float):
-        return int((max_ - min_) * fullness + min_)
-
 
 class RaidenRingJoinStrategy(DefaultJoinStrategy):
     def __init__(
             self,
             max_id: int,
             min_partner_deposit: float,
+            position_strategy: PositionStrategy,
             max_distance: int,
             kademlia_skip: int,
             max_initiated_channels: IntRange,
@@ -102,15 +107,13 @@ class RaidenRingJoinStrategy(DefaultJoinStrategy):
             deposit: IntRange
     ):
         def initiated_channels_mapping(fullness: Fullness):
-            return self._linear_int(*max_initiated_channels, fullness)
+            return linear_int(*max_initiated_channels, fullness)
 
         def accepted_channels_mapping(fullness: Fullness):
-            return self._linear_int(*max_accepted_channels, fullness)
+            return linear_int(*max_accepted_channels, fullness)
 
         def deposit_mapping(fullness: Fullness):
-            return self._linear_int(*deposit, fullness)
-
-        position_strategy = RingPositionStrategy(max_id)
+            return linear_int(*deposit, fullness)
 
         filter_strategies = [
             IdentityFilterStrategy(),
@@ -137,14 +140,6 @@ class RaidenRingJoinStrategy(DefaultJoinStrategy):
             connection_strategy=BidirectionalConnectionStrategy(deposit_mapping),
             position_strategy=position_strategy
         )
-
-    @staticmethod
-    def _linear_int(min_: int, max_: int, fullness: float) -> int:
-        return int((max_ - min_) * fullness + min_)
-
-    @staticmethod
-    def _linear_float(min_: float, max_: float, fullness: float) -> float:
-        return (max_ - min_) * fullness + min_
 
 
 class MicroRaidenJoinStrategy(DefaultJoinStrategy):
@@ -183,11 +178,16 @@ class MicroRaidenJoinStrategy(DefaultJoinStrategy):
 
 
 class RaidenLatticeJoinStrategy(JoinStrategy):
-    def __init__(self, lattice: Lattice, connection_strategy: ConnectionStrategy,):
+    def __init__(self, lattice: Lattice, deposit: IntRange):
         self.lattice = lattice
-        self.connection_strategy = connection_strategy
+
+        def deposit_mapping(fullness: Fullness):
+            return linear_int(*deposit, fullness)
+
+        self.connection_strategy = BidirectionalConnectionStrategy(deposit_mapping)
 
     def join(self, raw: RawNetwork, node: Node):
         coord = self.lattice.get_free_coord()
+        self.lattice.add_node(node, *coord)
         for partner in self.lattice.coord_neighbors(*coord):
             self.connection_strategy.connect(raw, node, partner)
