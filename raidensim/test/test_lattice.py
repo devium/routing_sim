@@ -84,3 +84,27 @@ def test_free_coords():
     lattice.add_node(nodes[6], 0, -1)
 
     print('\n' + lattice.draw_ascii())
+
+
+def test_nodes_at_distance():
+    lattice = Lattice()
+    for x in range(-2, 2):
+        for y in range(-2, 2):
+            lattice.add_node(Node(y * 4 + x, 0), x, y)
+
+    print('\n' + lattice.draw_ascii())
+
+    nodes = lattice.get_nodes_at_distance((-2, 0), 2)
+    coords = [lattice.node_to_coord[node] for node in nodes]
+    assert len(coords) == 4
+    assert all(coord in coords for coord in [(-1, 1), (0, 0), (-1, -1), (-2, -2)])
+
+    nodes = lattice.get_nodes_at_distance((-1, -1), 1)
+    coords = [lattice.node_to_coord[node] for node in nodes]
+    assert len(coords) == 4
+    assert all(coord in coords for coord in [(-2, -1), (-1, 0), (0, -1), (-1, -2)])
+
+    nodes = lattice.get_nodes_at_distance((1, -1), 3)
+    coords = [lattice.node_to_coord[node] for node in nodes]
+    assert len(coords) == 4
+    assert all(coord in coords for coord in [(-1, -2), (-2, -1), (-1, 0), (0, 1)])

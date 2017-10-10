@@ -57,7 +57,7 @@ NETWORK_CONFIG_RAIDEN_NETWORK = NetworkConfiguration(
     #     deposit=(4, 100)
     # )
     join_strategy=RaidenLatticeJoinStrategy(
-        LATTICE,
+        POSITION_STRATEGY,
         num_shortcut_channels=(2, 2),
         deposit=(5, 10)
     )

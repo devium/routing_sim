@@ -1,3 +1,4 @@
+import random
 import time
 from itertools import cycle
 from typing import List, Tuple
@@ -17,18 +18,22 @@ class Network(object):
         self.config = config
         self.raw = RawNetwork()
 
-        self.raw.generate_nodes(config.num_nodes, config.max_id, config.fullness_dist)
-        self.connect_nodes()
+        self.join_nodes()
         self.raw.remove_isolated()
 
-    def connect_nodes(self):
-        print('Connecting nodes.')
+    def join_nodes(self):
+        print('Joining nodes.')
         tic = time.time()
-        for i, node in enumerate(self.raw.nodes):
+        for i in range(self.config.num_nodes):
             toc = time.time()
             if toc - tic > 5:
                 tic = toc
-                print('Connecting node {}/{}'.format(i, len(self.raw.nodes)))
+                print('Joining node {}/{}'.format(i, self.config.num_nodes))
+
+            uid = random.randrange(self.config.max_id)
+            fullness = self.config.fullness_dist.random()
+            node = Node(uid, fullness)
+            self.raw.add_node(node)
             self.config.join_strategy.join(self.raw, node)
 
     def _calc_sector_angles(self, center, width):

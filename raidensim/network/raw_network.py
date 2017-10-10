@@ -1,8 +1,5 @@
-import random
-
 import networkx as nx
 
-from raidensim.network.dist import Distribution
 from raidensim.types import Path
 from raidensim.network.node import Node
 
@@ -26,12 +23,6 @@ class RawNetwork(nx.DiGraph):
 
     def __init__(self):
         nx.DiGraph.__init__(self)
-
-    def generate_nodes(self, num_nodes: int, max_id: int, fullness_dist: Distribution):
-        for i in range(num_nodes):
-            uid = random.randrange(max_id)
-            fullness = fullness_dist.random()
-            self.add_node(Node(uid, fullness))
 
     def remove_isolated(self):
         connected_nodes = {node for edge in self.edges for node in edge}

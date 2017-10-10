@@ -1,12 +1,14 @@
 import bisect
 import random
 from itertools import cycle
-from typing import Iterator, Callable
+from typing import Iterator, Callable, Union
 
 import math
+import numpy as np
 
 from raidensim.network.node import Node
 from raidensim.network.raw_network import RawNetwork
+from raidensim.strategy.position_strategy import PositionStrategy, LatticePositionStrategy
 from .filter_strategy import FilterStrategy
 
 
@@ -26,6 +28,7 @@ class CachedNetworkSelectionStrategy(SelectionStrategy):
     Maintains a sorted cache of all node IDs and a mapping from node ID to Node.
     """
     def __init__(self, filter_strategies: Iterator[FilterStrategy]):
+        # FIXME: This doesn't work anymore with nodes joining the network incrementally.
         SelectionStrategy.__init__(self, filter_strategies)
 
         # Cached network information.
@@ -138,11 +141,11 @@ class RandomSelectionStrategy(CachedNetworkSelectionStrategy):
                 yield other
 
 
-class RandomExcludingSelectionStrategy(RandomSelectionStrategy):
+class ExclusionSelectionStrategy(CachedNetworkSelectionStrategy):
     """
-    Faster version of a random selection strategy that removes nodes from the local cache that pass
-    any exclusion criteria. For example: permanently exclude nodes that have reached their maximum
-    channel count.
+    Sped-up version of a cached selection strategy that removes nodes from the local cache that
+    pass any exclusion criteria. For example: permanently exclude nodes that have reached their
+    maximum channel count.
 
     Exclusions can be reset in case a node becomes available again.
     """
@@ -151,27 +154,73 @@ class RandomExcludingSelectionStrategy(RandomSelectionStrategy):
             filter_strategies: Iterator[FilterStrategy],
             exclusion_criteria: Iterator[Callable[[RawNetwork, Node], bool]]
     ):
-        RandomSelectionStrategy.__init__(self, filter_strategies)
+        CachedNetworkSelectionStrategy.__init__(self, filter_strategies)
         self.exclusion_criteria = exclusion_criteria
         self.pending_excludes = []
 
-    def targets(self, raw: RawNetwork, node: Node) -> Iterator[Node]:
-        self._update_network_cache(raw)
+    def _update_exclusions(self):
         for exclude in reversed(sorted(self.pending_excludes)):
             del self.nodes[exclude]
         self.pending_excludes.clear()
 
-        if any(exclude(raw, node) for exclude in self.exclusion_criteria) or not self.nodes:
+    def _check_exclusion(self, raw: RawNetwork, node: Union[Node, int]) -> bool:
+        if isinstance(node, Node):
+            self._check_exclusion(raw, self.nodes.index(node))
+        elif isinstance(node, int):
+            node_idx = node
+            node = self.nodes[node_idx]
+            if any(exclude(raw, node) for exclude in self.exclusion_criteria):
+                self.pending_excludes.append(node_idx)
+                return True
+            else:
+                return False
+        else:
+            raise ValueError
+
+    def reset_exclusions(self):
+        # Trigger cache rebuild on next update.
+        self.cached_raw = None
+
+
+class RandomExclusionSelectionStrategy(ExclusionSelectionStrategy):
+    def targets(self, raw: RawNetwork, node: Node) -> Iterator[Node]:
+        self._update_network_cache(raw)
+        self._update_exclusions()
+
+        if self._check_exclusion(raw, node):
             return
 
         i_start = random.randint(0, len(self.nodes) - 1)
         for i in range(i_start, i_start + len(self.nodes)):
             other = self.nodes[i % len(self.nodes)]
-            if any(exclude(raw, other) for exclude in self.exclusion_criteria):
-                self.pending_excludes.append(i % len(self.nodes))
-            elif self.match(raw, node, other):
+            if not self._check_exclusion(raw, i % len(self.nodes)) and \
+                    self.match(raw, node, other):
                 yield other
 
-    def reset_exclusions(self):
-        # Trigger cache rebuild next time.
-        self.cached_raw = None
+
+class KleinbergSelectionStrategy(SelectionStrategy):
+    """
+    Randomly selects a node at a certain distance. The distance is sampled using an inverse square
+    distribution for optimal decentralized routing properties.
+    """
+    def __init__(
+            self,
+            filter_strategies: Iterator[FilterStrategy],
+            position_strategy: LatticePositionStrategy,
+            max_distance: int
+    ):
+        SelectionStrategy.__init__(self, filter_strategies)
+        self.position_strategy = position_strategy
+        # Log2 of max distance is highest phase.
+        self.max_phase = max_distance.bit_length() - 1
+
+    def targets(self, raw: RawNetwork, node: Node) -> Iterator[Node]:
+        while True:
+            phase = random.randint(0, self.max_phase)
+            distance = random.randint(2**phase, 2**(phase + 1) - 1)
+            targets = self.position_strategy.lattice.get_nodes_at_distance(node, distance)
+            targets = [target for target in targets if self.match(raw, node, target)]
+            if not targets:
+                # We could reroll distance but that would skew distribution.
+                break
+            yield random.sample(targets, 1)[0]

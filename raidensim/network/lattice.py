@@ -1,4 +1,4 @@
-from typing import Iterator
+from typing import Iterator, Union
 
 from raidensim.network.node import Node
 from raidensim.types import Coord
@@ -104,6 +104,22 @@ class Lattice(object):
             y = self.min_y + (self.max_y - self.min_y) // 2
 
         return x, y
+
+    def get_nodes_at_distance(self, node: Union[Node, Coord], distance: int) -> Iterator[Node]:
+        if isinstance(node, Node):
+            targets = self.get_nodes_at_distance(self.node_to_coord[node], distance)
+            for target in targets:
+                yield target
+        elif len(node) == 2:
+            x, y = node
+            for dx in range(-distance, distance + 1):
+                dy = distance - abs(dx)
+                for ysign in [-1, 1] if dy > 0 else [1]:
+                    xn, yn = x + dx, y + ysign * dy
+                    if (xn, yn) in self.coord_to_node:
+                        yield self.coord_to_node[xn, yn]
+        else:
+            raise ValueError
 
     def draw_ascii(self) -> str:
         display = ''

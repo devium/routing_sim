@@ -12,15 +12,22 @@ from raidensim.strategy.creation.filter_strategy import (
     FullerFilterStrategy,
     AcceptedLimitsFilterStrategy,
     MinIncomingDepositFilterStrategy,
-    TotalLimitsFilterStrategy, TotalBidirectionalLimitsFilterStrategy)
-from raidensim.strategy.position_strategy import PositionStrategy, RingPositionStrategy
-from .connection_strategy import ConnectionStrategy, BidirectionalConnectionStrategy, \
+    TotalLimitsFilterStrategy,
+    TotalBidirectionalLimitsFilterStrategy
+)
+from raidensim.strategy.position_strategy import PositionStrategy, RingPositionStrategy, \
+    LatticePositionStrategy
+from .connection_strategy import (
+    ConnectionStrategy,
+    BidirectionalConnectionStrategy,
     LatticeConnectionStrategy
+)
 from .selection_strategy import (
     SelectionStrategy,
     KademliaSelectionStrategy,
     RandomSelectionStrategy,
-    RandomExcludingSelectionStrategy)
+    KleinbergSelectionStrategy
+)
 from raidensim.types import Fullness, IntRange
 
 
@@ -179,8 +186,13 @@ class MicroRaidenJoinStrategy(DefaultJoinStrategy):
 
 
 class RaidenLatticeJoinStrategy(JoinStrategy):
-    def __init__(self, lattice: Lattice, num_shortcut_channels: IntRange, deposit: IntRange):
-        self.lattice = lattice
+    def __init__(
+            self,
+            position_strategy: LatticePositionStrategy,
+            num_shortcut_channels: IntRange,
+            deposit: IntRange
+    ):
+        self.lattice = position_strategy.lattice
 
         def deposit_mapping(fullness: Fullness):
             return linear_int(*deposit, fullness)
@@ -199,9 +211,10 @@ class RaidenLatticeJoinStrategy(JoinStrategy):
             return node['num_incoming_channels'] + node['num_outgoing_channels'] >= max_channels
 
         self.shortcut_mapping = shortcut_mapping
-        self.selection_strategy = RandomExcludingSelectionStrategy(
+        self.selection_strategy = KleinbergSelectionStrategy(
             filter_strategies=filter_strategies,
-            exclusion_criteria=[exclusion_criterion]
+            position_strategy=position_strategy,
+            max_distance=100
         )
         self.connection_strategy = BidirectionalConnectionStrategy(deposit_mapping)
         self.lattice_connection_strategy = LatticeConnectionStrategy(deposit_mapping)
@@ -214,8 +227,9 @@ class RaidenLatticeJoinStrategy(JoinStrategy):
         for partner in neighbors:
             self.lattice_connection_strategy.connect(raw, node, partner)
         try:
+            targets = self.selection_strategy.targets(raw, node)
             for i in range(self.shortcut_mapping(node.fullness)):
-                partner = next(self.selection_strategy.targets(raw, node))
+                partner = next(targets)
                 self.connection_strategy.connect(raw, node, partner)
         except StopIteration:
             pass
