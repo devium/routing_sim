@@ -207,10 +207,6 @@ class RaidenLatticeJoinStrategy(JoinStrategy):
             TotalBidirectionalLimitsFilterStrategy(shortcut_mapping)
         ]
 
-        def exclusion_criterion(raw: RawNetwork, node: Node):
-            max_channels = shortcut_mapping(node.fullness) * 2
-            return node['num_incoming_channels'] + node['num_outgoing_channels'] >= max_channels
-
         self.shortcut_mapping = shortcut_mapping
         self.selection_strategy = KleinbergSelectionStrategy(
             filter_strategies=filter_strategies,

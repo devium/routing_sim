@@ -12,6 +12,7 @@ import numpy as np
 import shutil
 
 from raidensim.network.network import Network
+from raidensim.network.node import Node
 from raidensim.network.raw_network import RawNetwork
 from raidensim.strategy.position_strategy import PositionStrategy
 from raidensim.strategy.routing.routing_strategy import RoutingStrategy
@@ -26,8 +27,8 @@ def simulate_balancing(
         transfer_value: int,
         routing_model: RoutingStrategy,
         name: str,
-        execute_transfers=True,
-        max_recorded_fails=5
+        max_recorded_fails: int,
+        execute_transfers=True
 ):
     """
     Simulates network transfers under the given fee model and plots some statistics.
@@ -67,6 +68,10 @@ def simulate_balancing(
     )
     post_imbalance_stdev = math.sqrt(
         sum(x**2 for x in post_imbalances) / len(post_imbalances)
+    )
+    num_depleted_channels = sum(
+        1 for u in net.raw.nodes() for e in net.raw[u].values()
+        if e['capacity'] == 0
     )
 
     max_capacity = max(pre_capacities + post_capacities)
@@ -111,7 +116,8 @@ def simulate_balancing(
         'Balance SD before: {:.2f}'.format(pre_net_balance_stdev),
         'Balance SD after: {:.2f}'.format(post_net_balance_stdev),
         'Imbalance SD before: {:.2f}'.format(pre_imbalance_stdev),
-        'Imbalance SD after: {:.2f}'.format(post_imbalance_stdev)
+        'Imbalance SD after: {:.2f}'.format(post_imbalance_stdev),
+        'Depleted channels: {}'.format(num_depleted_channels)
     ]
     for i, label in enumerate(labels):
         axs[1][3].text(0, 0.95 - i * 0.07, label)
@@ -138,19 +144,28 @@ def simulate_balancing(
     os.makedirs(dirpath, exist_ok=True)
 
     fig.savefig(os.path.join(dirpath, 'stats'), bbox_inches='tight')
-    print('Drawing network.')
+    print('Rendering network.')
     net.draw(filepath=os.path.join(dirpath, 'network'))
+
+    def channel_color_mapping(u: Node, v: Node):
+        uv = net.raw[u][v]
+        vu = net.raw[v][u]
+        if uv['capacity'] >= transfer_value and vu['capacity'] >= transfer_value:
+            return -1
+        else:
+            return 0
+    print('Rendering channel capacities.')
+    net.draw(
+        filepath=os.path.join(dirpath, 'channels'), channel_color_mapping=channel_color_mapping
+    )
+
     if fail_records:
         print('Rendering transfer failures.')
     for i, fail_history in enumerate(fail_records):
-        dirpath = os.path.join(dirpath, 'fail_{:02d}'.format(i))
-        net.draw_gif(
-            fail_history['source'],
-            fail_history['target'],
-            fail_history['path_history'],
-            100,
-            dirpath
-        )
+        source = fail_history['source']
+        target = fail_history['target']
+        dirpath = os.path.join(dirpath, 'fail_{}_{}'.format(source.uid, target.uid))
+        net.draw_gif(source, target, fail_history['path_history'], 100, dirpath)
         dirpath = os.path.dirname(dirpath)
     print('Rendering heat maps.')
     net.draw(heatmap_attr='num_transfers', filepath=os.path.join(dirpath, 'heatmap_transfers'))
@@ -188,8 +203,12 @@ def simulate_transfers(
             print('Transfer {}/{}'.format(i + 1, num_transfers))
 
         source, target = random.sample(raw.nodes, 2)
-        # Repick nodes that cannot send transfers anymore.
-        while max(e['capacity'] for e in raw[source].values()) < value:
+        # Repick nodes that cannot send or receive transfers anymore.
+        while all(e['capacity'] < value for e in raw[source].values()) and \
+            all(
+                e['deposit'] - e['net_balance'] + e['imbalance'] < value
+                for e in raw[target].values()
+            ):
             source, target = random.sample(raw.nodes, 2)
 
         path, path_history = routing_model.route(raw, source, target, value)

@@ -18,8 +18,9 @@ from raidensim.types import Path
 class Network(object):
     def __init__(self, config: NetworkConfiguration):
         self.config = config
-        self.raw = RawNetwork()
 
+        random.seed(0)
+        self.raw = RawNetwork()
         self.join_nodes()
         self.raw.remove_isolated()
 
@@ -54,6 +55,7 @@ class Network(object):
             paths: List[Path] = None,
             highlighted_nodes: List[List[Node]] = None,
             node_color_mapping: Callable[[Node], int] = None,
+            channel_color_mapping: Callable[[Node, Node], int] = None,
             kademlia_center: int=0,
             kademlia_buckets: List[Tuple[int,int]]=None,
             draw_labels: bool=False,
@@ -68,27 +70,42 @@ class Network(object):
         ax = fig.add_subplot(111)
         ax.axis('off')
 
-        colors = ['r', 'b', 'c', 'g']
+        colors = ['r', 'g', 'b', 'c']
         color_cycle = cycle(colors)
 
+        node_color = 'grey'
         if node_color_mapping:
-            node_color = [
-                colors[node_color_mapping(node) % len(colors)] for node in self.raw.nodes
-            ]
-        else:
-            node_color = 'grey'
+            default_color = node_color
+            node_color = []
+            for node in self.raw.nodes:
+                mapping = node_color_mapping(node)
+                if mapping == -1:
+                    node_color.append(default_color)
+                else:
+                    node_color.append(colors[mapping % len(colors)])
+
+        edge_color = 'lightgrey'
+        if channel_color_mapping:
+            default_color = edge_color
+            edge_color = []
+            for u, v in self.raw.edges:
+                mapping = channel_color_mapping(u, v)
+                if mapping == -1:
+                    edge_color.append(default_color)
+                else:
+                    edge_color.append(colors[mapping % len(colors)])
 
         if heatmap_attr:
             heatmap_values = [
                 abs(self.raw[a][b][heatmap_attr]) for a, b in self.raw.edges
             ]
-            max_ = max(heatmap_values)
-            color_cycle = [x / max_ * 100 for x in heatmap_values]
+            max_ = max(max(heatmap_values), 1)
+            color = [x / max_ * 100 for x in heatmap_values]
             nx.draw_networkx(
                 self.raw,
                 pos,
                 node_color=node_color,
-                edge_color=color_cycle,
+                edge_color=color,
                 edge_cmap=plt.cm.inferno,
                 node_size=1,
                 with_labels=False,
@@ -100,7 +117,7 @@ class Network(object):
                 self.raw,
                 pos,
                 node_color=node_color,
-                edge_color='lightgrey',
+                edge_color=edge_color,
                 node_size=1,
                 with_labels=False,
                 ax=ax,
@@ -111,7 +128,7 @@ class Network(object):
             for path in paths:
                 for i in range(len(path) - 1):
                     edges.append((path[i], path[i+1]))
-            nx.draw_networkx_edges(self.raw, pos, edgelist=edges, edge_color='r', arrows=False)
+            nx.draw_networkx_edges(self.raw, pos, edgelist=edges, edge_color='b', arrows=False)
 
         if draw_labels:
             labels = {node: node.uid for node in self.raw.nodes}
@@ -123,7 +140,7 @@ class Network(object):
                     self.raw,
                     pos,
                     nodelist=highlighted_node_set,
-                    node_size=12,
+                    node_size=8,
                     node_color=next(color_cycle)
                 )
 
@@ -151,10 +168,12 @@ class Network(object):
             target: Node,
             path_history: List[Path],
             max_frames: int,
-            dirpath: str
+            dirpath: str,
+            channel_color_mapping: Callable[[Node, Node], int] = None,
     ):
         visited = {source}
         gif_filenames = []
+
         for isp, subpath in enumerate(path_history):
             visited |= set(subpath)
             if isp > max_frames - 1:
@@ -163,7 +182,8 @@ class Network(object):
             gif_filenames.append(filename)
             self.draw(
                 [subpath], [visited, [source, target]],
-                filepath=os.path.join(dirpath, filename)
+                filepath=os.path.join(dirpath, filename),
+                channel_color_mapping=channel_color_mapping
             )
 
         filename = 'animation.gif'

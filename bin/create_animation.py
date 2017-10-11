@@ -15,7 +15,7 @@ from raidensim.strategy.creation.join_strategy import (
     MicroRaidenJoinStrategy
 )
 from raidensim.strategy.position_strategy import RingPositionStrategy
-from raidensim.strategy.routing.next_hop.next_hop_routing_strategy import NextHopRoutingStrategy
+from raidensim.strategy.routing.next_hop.priorty_bfs_routing_strategy import PriorityBFSRoutingStrategy
 from raidensim.strategy.routing.next_hop.priority_strategy import DistancePriorityStrategy
 
 MAX_ID = 2**32
@@ -58,7 +58,7 @@ OUT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, '../blender/data'))
 ANIMATION_CONFIG = AnimationConfiguration(
     out_dir=OUT_DIR,
     network=NETWORK_CONFIG_RAIDEN_NETWORK,
-    routing_model=NextHopRoutingStrategy(DistancePriorityStrategy(RingPositionStrategy(MAX_ID))),
+    routing_model=PriorityBFSRoutingStrategy(DistancePriorityStrategy(RingPositionStrategy(MAX_ID))),
     popup_channels=True,
     animation_length=5,
     transfer_hop_delay=0.2,

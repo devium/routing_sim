@@ -1,3 +1,5 @@
+from typing import Tuple
+
 from raidensim.network.node import Node
 from raidensim.network.raw_network import RawNetwork
 from raidensim.strategy.position_strategy import PositionStrategy
@@ -58,4 +60,4 @@ class DistanceNetBalancePriorityStrategy(PriorityStrategy):
     ) -> float:
         distance = self.position_strategy.distance(v, target)
         fee = sigmoid(e['net_balance'] + value)
-        return distance * fee
+        return 0.8 * distance + 0.2 * fee

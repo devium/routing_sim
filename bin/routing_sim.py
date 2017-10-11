@@ -1,6 +1,7 @@
 import os
 
 import math
+import random
 
 from raidensim.network.network import Network
 
@@ -19,7 +20,7 @@ from raidensim.strategy.routing.global_routing_strategy import (
     net_balance_fee_model,
     constant_fee_model
 )
-from raidensim.strategy.routing.next_hop.next_hop_routing_strategy import NextHopRoutingStrategy
+from raidensim.strategy.routing.next_hop.greedy_routing_strategy import GreedyRoutingStrategy
 from raidensim.strategy.routing.next_hop.priority_strategy import (
     DistancePriorityStrategy,
     DistanceNetBalancePriorityStrategy
@@ -37,7 +38,7 @@ SCRIPT_DIR = os.path.dirname(__file__)
 OUT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, '../out'))
 
 
-NUM_NODES = 4000
+NUM_NODES = 400
 
 MAX_ID = 2**32
 # POSITION_STRATEGY = RingPositionStrategy(MAX_ID)
@@ -66,7 +67,7 @@ NETWORK_CONFIG_RAIDEN_NETWORK = NetworkConfiguration(
         POSITION_STRATEGY,
         max_distance=int(math.sqrt(NUM_NODES)),
         num_shortcut_channels=(4, 4),
-        deposit=(5, 10)
+        deposit=(10, 20)
     )
 )
 
@@ -94,34 +95,33 @@ def run():
     constant_global_routing = GlobalRoutingStrategy(constant_fee_model)
     net_balance_global_routing = GlobalRoutingStrategy(net_balance_fee_model)
     imbalance_global_routing = GlobalRoutingStrategy(imbalance_fee_model)
-    distance_next_hop_routing = NextHopRoutingStrategy(DistancePriorityStrategy(POSITION_STRATEGY))
-    distance_net_balance_next_hop_routing = NextHopRoutingStrategy(
+    distance_greedy_routing = GreedyRoutingStrategy(DistancePriorityStrategy(POSITION_STRATEGY))
+    distance_net_balance_greedy_routing = GreedyRoutingStrategy(
         DistanceNetBalancePriorityStrategy(POSITION_STRATEGY)
     )
-    assisted_next_hop_routing = NextHopRoutingStrategy(
-        GloballyAssistedPriorityStrategy(POSITION_STRATEGY)
-    )
-    lattice_next_hop_routing = NextHopRoutingStrategy(DistancePriorityStrategy(POSITION_STRATEGY))
 
+    random.seed(0)
     net = Network(config)
 
     # Routing simulation + animation.
     routing_models = [
         # constant_global_routing,
-        # distance_next_hop_routing,
-        distance_net_balance_next_hop_routing,
-        # assisted_next_hop_routing,
-        # lattice_next_hop_routing
+        distance_greedy_routing,
+        # distance_net_balance_greedy_routing
     ]
     simulate_routing(
-        net, OUT_DIR, num_sample_nodes=20, num_paths=2, value=1, routing_models=routing_models
+        net, OUT_DIR,
+        num_sample_nodes=10,
+        num_paths=3,
+        value=1,
+        routing_models=routing_models,
+        max_gif_frames=30
     )
 
     # Network scaling simulation.
     routing_models = [
-        ('next_hop_distance', distance_next_hop_routing),
-        ('next_hop_net_balance', distance_net_balance_next_hop_routing),
-        # ('next_hop_globally_assisted', assisted_next_hop_routing)
+        ('greedy_distance', distance_greedy_routing),
+        # ('greedy_net_balance', distance_net_balance_greedy_routing)
     ]
     for name, routing_model in routing_models:
         simulate_balancing(
@@ -131,7 +131,8 @@ def run():
             transfer_value=1,
             routing_model=routing_model,
             name=name,
-            execute_transfers=True
+            max_recorded_fails=1,
+            execute_transfers=False
         )
 
 

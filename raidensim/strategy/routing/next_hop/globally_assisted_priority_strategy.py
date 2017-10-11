@@ -1,7 +1,7 @@
 from raidensim.network.node import Node
 from raidensim.network.raw_network import RawNetwork
 from raidensim.strategy.position_strategy import PositionStrategy
-from raidensim.strategy.routing.next_hop.next_hop_routing_strategy import NextHopRoutingStrategy
+from raidensim.strategy.routing.next_hop.priorty_bfs_routing_strategy import PriorityBFSRoutingStrategy
 from raidensim.strategy.routing.next_hop.priority_strategy import (
     PriorityStrategy,
     DistancePriorityStrategy
@@ -24,7 +24,7 @@ class GloballyAssistedPriorityStrategy(PriorityStrategy):
     def __init__(self, position_strategy: PositionStrategy):
         self.position_strategy = position_strategy
         # Nested next-hop routing based on global information. Used with transfer value 0.
-        self.global_routing = NextHopRoutingStrategy(DistancePriorityStrategy(position_strategy))
+        self.global_routing = PriorityBFSRoutingStrategy(DistancePriorityStrategy(position_strategy))
 
     def priority(
             self,
