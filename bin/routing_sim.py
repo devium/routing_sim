@@ -1,5 +1,9 @@
 import os
 
+import math
+
+from raidensim.network.network import Network
+
 from raidensim.network.config import NetworkConfiguration
 from raidensim.network.dist import (
     ParetoDistribution,
@@ -33,6 +37,8 @@ SCRIPT_DIR = os.path.dirname(__file__)
 OUT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, '../out'))
 
 
+NUM_NODES = 4000
+
 MAX_ID = 2**32
 # POSITION_STRATEGY = RingPositionStrategy(MAX_ID)
 
@@ -40,7 +46,7 @@ LATTICE = Lattice()
 POSITION_STRATEGY = LatticePositionStrategy(LATTICE)
 
 NETWORK_CONFIG_RAIDEN_NETWORK = NetworkConfiguration(
-    num_nodes=10000,
+    num_nodes=NUM_NODES,
     max_id=MAX_ID,
     # fullness_dist=CircleDistribution(),
     # fullness_dist=ParetoDistribution(5, 0, 1),
@@ -58,7 +64,8 @@ NETWORK_CONFIG_RAIDEN_NETWORK = NetworkConfiguration(
     # )
     join_strategy=RaidenLatticeJoinStrategy(
         POSITION_STRATEGY,
-        num_shortcut_channels=(2, 2),
+        max_distance=int(math.sqrt(NUM_NODES)),
+        num_shortcut_channels=(4, 4),
         deposit=(5, 10)
     )
 )
@@ -96,34 +103,36 @@ def run():
     )
     lattice_next_hop_routing = NextHopRoutingStrategy(DistancePriorityStrategy(POSITION_STRATEGY))
 
+    net = Network(config)
+
     # Routing simulation + animation.
     routing_models = [
         # constant_global_routing,
-        distance_next_hop_routing,
-        # distance_net_balance_next_hop_routing,
+        # distance_next_hop_routing,
+        distance_net_balance_next_hop_routing,
         # assisted_next_hop_routing,
         # lattice_next_hop_routing
     ]
     simulate_routing(
-        config, OUT_DIR, num_sample_nodes=20, num_paths=5, value=1, routing_models=routing_models
+        net, OUT_DIR, num_sample_nodes=20, num_paths=2, value=1, routing_models=routing_models
     )
 
     # Network scaling simulation.
-    # routing_models = [
-    #     ('next_hop_distance', distance_next_hop_routing),
-    #     ('next_hop_net_balance', distance_net_balance_next_hop_routing),
-    #     # ('next_hop_globally_assisted', assisted_next_hop_routing)
-    # ]
-    # for name, routing_model in routing_models:
-    #     simulate_balancing(
-    #         config,
-    #         OUT_DIR,
-    #         num_transfers=10000,
-    #         transfer_value=1,
-    #         routing_model=routing_model,
-    #         name=name,
-    #         execute_transfers=True
-    #     )
+    routing_models = [
+        ('next_hop_distance', distance_next_hop_routing),
+        ('next_hop_net_balance', distance_net_balance_next_hop_routing),
+        # ('next_hop_globally_assisted', assisted_next_hop_routing)
+    ]
+    for name, routing_model in routing_models:
+        simulate_balancing(
+            net,
+            OUT_DIR,
+            num_transfers=1000,
+            transfer_value=1,
+            routing_model=routing_model,
+            name=name,
+            execute_transfers=True
+        )
 
 
 if __name__ == '__main__':

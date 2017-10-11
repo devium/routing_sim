@@ -44,6 +44,15 @@ class RawNetwork(nx.DiGraph):
     def close_channel(self, other: Node) -> None:
         self.remove_edge(self, other)
 
+    def reset_channels(self):
+        bi_edges = {frozenset({u, v}) for u, v in self.edges}
+        for u, v in bi_edges:
+            uv = self[u][v]
+            vu = self[v][u]
+            uv['balance'] = 0
+            vu['balance'] = 0
+            self.update_channel_cache(u, v, uv, vu)
+
     def update_channel_cache(self, u: Node, v: Node, uv: dict=None, vu: dict=None):
         if uv is None:
             uv = self[u].get(v)

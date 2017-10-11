@@ -6,15 +6,17 @@ import shutil
 
 import os
 
+import math
+
 from raidensim.network.network import Network
+from raidensim.network.node import Node
 from raidensim.strategy.creation.join_strategy import DefaultJoinStrategy
 from raidensim.strategy.routing.routing_strategy import RoutingStrategy
 from raidensim.strategy.creation.filter_strategy import KademliaFilterStrategy
-from raidensim.network.config import NetworkConfiguration
 
 
 def simulate_routing(
-        config: NetworkConfiguration,
+        net: Network,
         out_dir: str,
         num_sample_nodes: int,
         num_paths: int,
@@ -22,29 +24,27 @@ def simulate_routing(
         routing_models: List[RoutingStrategy],
         max_gif_frames=20
 ):
-    # Setup network.
-    config.fullness_dist.reset()
-    random.seed(0)
-    net = Network(config)
+    net.reset()
 
     # Prepare folder.
-    dirpath = os.path.join(out_dir, 'routing_{}'.format(config.num_nodes))
+    dirpath = os.path.join(out_dir, 'routing_{}'.format(net.config.num_nodes))
     shutil.rmtree(dirpath, ignore_errors=True)
     os.makedirs(dirpath, exist_ok=True)
 
     # Plot baseline network.
     print('Plotting network.')
     net.draw(filepath=os.path.join(dirpath, 'network'))
-    net.draw(draw_labels=True, filepath=os.path.join(dirpath, 'network_labels'))
+    if len(net.raw.nodes) < 1000:
+        net.draw(draw_labels=True, filepath=os.path.join(dirpath, 'network_labels'))
 
     # Plot connectivity of a few random sample nodes.
     if num_sample_nodes > 0:
         print('Plotting sample node connectivity.')
 
     try:
-        if isinstance(config.join_strategy, DefaultJoinStrategy):
+        if isinstance(net.config.join_strategy, DefaultJoinStrategy):
             kademlia_filter = next(
-                filter_ for filter_ in config.join_strategy.selection_strategy.filter_strategies
+                filter_ for filter_ in net.config.join_strategy.selection_strategy.filter_strategies
                 if isinstance(filter_, KademliaFilterStrategy)
             )
         else:
@@ -62,7 +62,15 @@ def simulate_routing(
                 filepath=os.path.join(dirpath, 'node_{}'.format(i))
             )
         else:
-            net.draw(channels, filepath=os.path.join(dirpath, 'node_{}'.format(i)))
+            def node_color(color_node: Node):
+                distance = net.config.position_strategy.distance(node, color_node)
+                return int(math.log2(distance)) if distance > 0 else 0
+
+            net.draw(
+                channels,
+                node_color_mapping=node_color,
+                filepath=os.path.join(dirpath, 'node_{}'.format(i))
+            )
 
     # Perform routing.
     # cn.nodes order is non-deterministic. Sort for reproducible sampling.
@@ -92,41 +100,8 @@ def simulate_routing(
                 print('No path found.')
 
             if path_history:
-                # Plot path evolution.
-                gif_filenames = []
-                visited = {source}
-                num_wrong_turns = 0
-                for isp in range(len(path_history) - 1):
-                    prev = path_history[isp]
-                    curr = path_history[isp + 1]
-                    if prev != curr[:-1]:
-                        num_wrong_turns += 1
-                    visited |= set(prev)
-
-                print('Took {} wrong turn(s).'.format(num_wrong_turns))
-                print('Contacted {} distinct nodes in the process: {}'.format(
-                    len(visited), visited)
-                )
-
-                visited = {source}
-                for isp, subpath in enumerate(path_history):
-                    visited |= set(subpath)
-                    if isp > max_gif_frames - 1:
-                        break
-                    filename = 'step_{:04d}.png'.format(isp)
-                    gif_filenames.append(filename)
-                    net.draw(
-                        [subpath], [visited, [source, target]],
-                        filepath=os.path.join(dirpath, filename)
-                    )
-
-                filename = 'animation.gif'
-                with imageio.get_writer(
-                        os.path.join(dirpath, filename), mode='I', fps=3
-                ) as writer:
-                    for filename in gif_filenames:
-                        image = imageio.imread(os.path.join(dirpath, filename))
-                        writer.append_data(image)
+                print('Rendering path evolution.')
+                net.draw_gif(source, target, path_history, max_gif_frames, dirpath)
 
             dirpath = os.path.dirname(dirpath)
         dirpath = os.path.dirname(dirpath)

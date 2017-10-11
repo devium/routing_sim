@@ -1,7 +1,9 @@
 import random
 import time
 from itertools import cycle
-from typing import List, Tuple
+from typing import List, Tuple, Callable
+
+import imageio
 import matplotlib.pyplot as plt
 from matplotlib.patches import Wedge
 import networkx as nx
@@ -36,6 +38,11 @@ class Network(object):
             self.raw.add_node(node)
             self.config.join_strategy.join(self.raw, node)
 
+    def reset(self):
+        print('Resetting network.')
+        random.seed(0)
+        self.raw.reset_channels()
+
     def _calc_sector_angles(self, center, width):
         # Start angle and end angle.
         sangle = 90 - (center + width / 2) / float(self.config.max_id) * 360
@@ -46,14 +53,13 @@ class Network(object):
             self,
             paths: List[Path] = None,
             highlighted_nodes: List[List[Node]] = None,
+            node_color_mapping: Callable[[Node], int] = None,
             kademlia_center: int=0,
             kademlia_buckets: List[Tuple[int,int]]=None,
             draw_labels: bool=False,
             heatmap_attr: str=None,
             filepath: str=None
     ):
-        edge_color = '#eeeeee'
-
         pos = self.config.position_strategy.map(self.raw.nodes)
 
         plt.clf()
@@ -62,16 +68,27 @@ class Network(object):
         ax = fig.add_subplot(111)
         ax.axis('off')
 
+        colors = ['r', 'b', 'c', 'g']
+        color_cycle = cycle(colors)
+
+        if node_color_mapping:
+            node_color = [
+                colors[node_color_mapping(node) % len(colors)] for node in self.raw.nodes
+            ]
+        else:
+            node_color = 'grey'
+
         if heatmap_attr:
             heatmap_values = [
                 abs(self.raw[a][b][heatmap_attr]) for a, b in self.raw.edges
             ]
             max_ = max(heatmap_values)
-            colors = [x / max_ * 100 for x in heatmap_values]
+            color_cycle = [x / max_ * 100 for x in heatmap_values]
             nx.draw_networkx(
                 self.raw,
                 pos,
-                edge_color=colors,
+                node_color=node_color,
+                edge_color=color_cycle,
                 edge_cmap=plt.cm.inferno,
                 node_size=1,
                 with_labels=False,
@@ -82,7 +99,8 @@ class Network(object):
             nx.draw_networkx(
                 self.raw,
                 pos,
-                edge_color=edge_color,
+                node_color=node_color,
+                edge_color='lightgrey',
                 node_size=1,
                 with_labels=False,
                 ax=ax,
@@ -100,24 +118,22 @@ class Network(object):
             nx.draw_networkx_labels(self.raw, pos, labels, font_size=5)
 
         if highlighted_nodes:
-            colors = cycle(['r', 'b', 'c', 'g'])
             for highlighted_node_set in highlighted_nodes:
                 nx.draw_networkx_nodes(
                     self.raw,
                     pos,
                     nodelist=highlighted_node_set,
                     node_size=12,
-                    node_color=next(colors)
+                    node_color=next(color_cycle)
                 )
 
         if kademlia_buckets:
-            colors = cycle(['r', 'b', 'c', 'g'])
             for bucket in kademlia_buckets:
                 lcenter = kademlia_center - bucket[0] - (bucket[1] - bucket[0]) // 2
                 rcenter = kademlia_center + bucket[0] + (bucket[1] - bucket[0]) // 2
                 width = bucket[1] - bucket[0]
 
-                color = next(colors)
+                color = next(color_cycle)
                 sangle, eangle = self._calc_sector_angles(lcenter, width)
                 ax.add_artist(Wedge((0, 0), 2, sangle, eangle, color=color, alpha=0.1))
                 sangle, eangle = self._calc_sector_angles(rcenter, width)
@@ -129,3 +145,31 @@ class Network(object):
         else:
             plt.show()
 
+    def draw_gif(
+            self,
+            source: Node,
+            target: Node,
+            path_history: List[Path],
+            max_frames: int,
+            dirpath: str
+    ):
+        visited = {source}
+        gif_filenames = []
+        for isp, subpath in enumerate(path_history):
+            visited |= set(subpath)
+            if isp > max_frames - 1:
+                break
+            filename = 'step_{:04d}.png'.format(isp)
+            gif_filenames.append(filename)
+            self.draw(
+                [subpath], [visited, [source, target]],
+                filepath=os.path.join(dirpath, filename)
+            )
+
+        filename = 'animation.gif'
+        with imageio.get_writer(
+                os.path.join(dirpath, filename), mode='I', fps=3
+        ) as writer:
+            for filename in gif_filenames:
+                image = imageio.imread(os.path.join(dirpath, filename))
+                writer.append_data(image)

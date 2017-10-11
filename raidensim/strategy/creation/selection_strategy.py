@@ -211,13 +211,13 @@ class KleinbergSelectionStrategy(SelectionStrategy):
     ):
         SelectionStrategy.__init__(self, filter_strategies)
         self.position_strategy = position_strategy
-        # Log2 of max distance is highest phase.
-        self.max_phase = max_distance.bit_length() - 1
+        # Each annulus ranges from k to 2k - 1. The largest annulus is annulus #log2(dmax).
+        self.max_annulus = max_distance.bit_length() - 1
 
     def targets(self, raw: RawNetwork, node: Node) -> Iterator[Node]:
         while True:
-            phase = random.randint(0, self.max_phase)
-            distance = random.randint(2**phase, 2**(phase + 1) - 1)
+            annulus = random.randint(0, self.max_annulus)
+            distance = random.randint(2**annulus, 2**(annulus + 1) - 1)
             targets = self.position_strategy.lattice.get_nodes_at_distance(node, distance)
             targets = [target for target in targets if self.match(raw, node, target)]
             if not targets:

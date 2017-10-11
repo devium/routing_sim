@@ -189,6 +189,7 @@ class RaidenLatticeJoinStrategy(JoinStrategy):
     def __init__(
             self,
             position_strategy: LatticePositionStrategy,
+            max_distance: int,
             num_shortcut_channels: IntRange,
             deposit: IntRange
     ):
@@ -214,7 +215,7 @@ class RaidenLatticeJoinStrategy(JoinStrategy):
         self.selection_strategy = KleinbergSelectionStrategy(
             filter_strategies=filter_strategies,
             position_strategy=position_strategy,
-            max_distance=100
+            max_distance=max_distance
         )
         self.connection_strategy = BidirectionalConnectionStrategy(deposit_mapping)
         self.lattice_connection_strategy = LatticeConnectionStrategy(deposit_mapping)
