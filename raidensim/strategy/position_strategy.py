@@ -2,6 +2,7 @@ from typing import Union, Iterable
 
 import math
 
+import numpy as np
 from raidensim.network.lattice import Lattice
 from raidensim.network.node import Node
 
@@ -46,7 +47,7 @@ class LatticePositionStrategy(PositionStrategy):
     def __init__(self, lattice: Lattice):
         self.lattice = lattice
 
-    def _map_node(self, node: Node) -> (int, int):
+    def _map_node(self, node: Node) -> np.array:
         return self.lattice.node_to_coord[node]
 
     def distance(self, a: Node, b: Node):

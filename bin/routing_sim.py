@@ -12,7 +12,7 @@ from raidensim.network.dist import (
     MicroRaidenDistribution,
     CircleDistribution
 )
-from raidensim.network.lattice import Lattice
+from raidensim.network.lattice import Lattice, WovenLattice
 from raidensim.strategy.position_strategy import LatticePositionStrategy, RingPositionStrategy
 from raidensim.strategy.routing.global_routing_strategy import (
     GlobalRoutingStrategy,
@@ -38,12 +38,12 @@ SCRIPT_DIR = os.path.dirname(__file__)
 OUT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, '../out'))
 
 
-NUM_NODES = 400
+NUM_NODES = 10000
 
 MAX_ID = 2**32
 # POSITION_STRATEGY = RingPositionStrategy(MAX_ID)
 
-LATTICE = Lattice()
+LATTICE = WovenLattice(2, 4, 7)
 POSITION_STRATEGY = LatticePositionStrategy(LATTICE)
 
 NETWORK_CONFIG_RAIDEN_NETWORK = NetworkConfiguration(
@@ -65,8 +65,7 @@ NETWORK_CONFIG_RAIDEN_NETWORK = NetworkConfiguration(
     # )
     join_strategy=RaidenLatticeJoinStrategy(
         POSITION_STRATEGY,
-        max_distance=int(math.sqrt(NUM_NODES)),
-        num_shortcut_channels=(4, 4),
+        num_shortcut_channels=(0, 0),
         deposit=(10, 20)
     )
 )
@@ -109,31 +108,33 @@ def run():
         distance_greedy_routing,
         # distance_net_balance_greedy_routing
     ]
-    simulate_routing(
-        net, OUT_DIR,
-        num_sample_nodes=10,
-        num_paths=3,
-        value=1,
-        routing_models=routing_models,
-        max_gif_frames=30
-    )
+    if True:
+        simulate_routing(
+            net, OUT_DIR,
+            num_sample_nodes=5,
+            num_paths=3,
+            value=1,
+            routing_models=routing_models,
+            max_gif_frames=30
+        )
 
     # Network scaling simulation.
     routing_models = [
         ('greedy_distance', distance_greedy_routing),
         # ('greedy_net_balance', distance_net_balance_greedy_routing)
     ]
-    for name, routing_model in routing_models:
-        simulate_balancing(
-            net,
-            OUT_DIR,
-            num_transfers=1000,
-            transfer_value=1,
-            routing_model=routing_model,
-            name=name,
-            max_recorded_fails=1,
-            execute_transfers=False
-        )
+    if True:
+        for name, routing_model in routing_models:
+            simulate_balancing(
+                net,
+                OUT_DIR,
+                num_transfers=1000,
+                transfer_value=1,
+                routing_model=routing_model,
+                name=name,
+                max_recorded_fails=1,
+                execute_transfers=False
+            )
 
 
 if __name__ == '__main__':

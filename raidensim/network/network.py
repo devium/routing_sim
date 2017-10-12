@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Wedge
 import networkx as nx
 import os
+import numpy as np
 
 from raidensim.network.config import NetworkConfiguration
 from raidensim.network.raw_network import RawNetwork
@@ -61,8 +62,15 @@ class Network(object):
             draw_labels: bool=False,
             heatmap_attr: str=None,
             filepath: str=None
-    ):
+    ) -> bool:
         pos = self.config.position_strategy.map(self.raw.nodes)
+        first_pos = next(iter(pos.values()))
+        if len(first_pos) > 2:
+            print('Warning: Cannot draw grids with rank higher than 2.')
+            return False
+        elif len(first_pos) == 1:
+            for node, pos_value in pos.items():
+                pos[node] = np.append(pos_value, 0)
 
         plt.clf()
         fig = plt.gcf()
@@ -162,6 +170,8 @@ class Network(object):
         else:
             plt.show()
 
+        return True
+
     def draw_gif(
             self,
             source: Node,
@@ -180,11 +190,12 @@ class Network(object):
                 break
             filename = 'step_{:04d}.png'.format(isp)
             gif_filenames.append(filename)
-            self.draw(
+            if not self.draw(
                 [subpath], [visited, [source, target]],
                 filepath=os.path.join(dirpath, filename),
                 channel_color_mapping=channel_color_mapping
-            )
+            ):
+                return
 
         filename = 'animation.gif'
         with imageio.get_writer(

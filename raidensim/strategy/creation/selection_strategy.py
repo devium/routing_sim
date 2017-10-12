@@ -196,31 +196,3 @@ class RandomExclusionSelectionStrategy(ExclusionSelectionStrategy):
             if not self._check_exclusion(raw, i % len(self.nodes)) and \
                     self.match(raw, node, other):
                 yield other
-
-
-class KleinbergSelectionStrategy(SelectionStrategy):
-    """
-    Randomly selects a node at a certain distance. The distance is sampled using an inverse square
-    distribution for optimal decentralized routing properties.
-    """
-    def __init__(
-            self,
-            filter_strategies: Iterator[FilterStrategy],
-            position_strategy: LatticePositionStrategy,
-            max_distance: int
-    ):
-        SelectionStrategy.__init__(self, filter_strategies)
-        self.position_strategy = position_strategy
-        # Each annulus ranges from k to 2k - 1. The largest annulus is annulus #log2(dmax).
-        self.max_annulus = max_distance.bit_length() - 1
-
-    def targets(self, raw: RawNetwork, node: Node) -> Iterator[Node]:
-        while True:
-            annulus = random.randint(0, self.max_annulus)
-            distance = random.randint(2**annulus, 2**(annulus + 1) - 1)
-            targets = self.position_strategy.lattice.get_nodes_at_distance(node, distance)
-            targets = [target for target in targets if self.match(raw, node, target)]
-            if not targets:
-                # We could reroll distance but that would skew distribution.
-                break
-            yield random.sample(targets, 1)[0]

@@ -25,8 +25,7 @@ from .connection_strategy import (
 from .selection_strategy import (
     SelectionStrategy,
     KademliaSelectionStrategy,
-    RandomSelectionStrategy,
-    KleinbergSelectionStrategy
+    RandomSelectionStrategy
 )
 from raidensim.types import Fullness, IntRange
 
@@ -189,7 +188,6 @@ class RaidenLatticeJoinStrategy(JoinStrategy):
     def __init__(
             self,
             position_strategy: LatticePositionStrategy,
-            max_distance: int,
             num_shortcut_channels: IntRange,
             deposit: IntRange
     ):
@@ -201,32 +199,13 @@ class RaidenLatticeJoinStrategy(JoinStrategy):
         def shortcut_mapping(fullness: Fullness):
             return linear_int(*num_shortcut_channels, fullness)
 
-        filter_strategies = [
-            IdentityFilterStrategy(),
-            NotConnectedFilterStrategy(),
-            TotalBidirectionalLimitsFilterStrategy(shortcut_mapping)
-        ]
-
         self.shortcut_mapping = shortcut_mapping
-        self.selection_strategy = KleinbergSelectionStrategy(
-            filter_strategies=filter_strategies,
-            position_strategy=position_strategy,
-            max_distance=max_distance
-        )
-        self.connection_strategy = BidirectionalConnectionStrategy(deposit_mapping)
         self.lattice_connection_strategy = LatticeConnectionStrategy(deposit_mapping)
 
     def join(self, raw: RawNetwork, node: Node):
         coord = self.lattice.get_free_coord()
-        self.lattice.add_node(node, *coord)
-        neighbors = list(self.lattice.coord_neighbors(*coord))
+        self.lattice.add_node(node, coord)
+        neighbors = list(self.lattice.coord_neighbors(coord))
         neighbors = [neighbor for neighbor in neighbors if (node, neighbor) not in raw.edges]
         for partner in neighbors:
             self.lattice_connection_strategy.connect(raw, node, partner)
-        try:
-            targets = self.selection_strategy.targets(raw, node)
-            for i in range(self.shortcut_mapping(node.fullness)):
-                partner = next(targets)
-                self.connection_strategy.connect(raw, node, partner)
-        except StopIteration:
-            pass

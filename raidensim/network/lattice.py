@@ -1,65 +1,71 @@
-from typing import Iterator, Union
+from typing import Iterator, Union, Iterable
+
+import numpy as np
 
 from raidensim.network.node import Node
 from raidensim.types import Coord
 
 
 class Lattice(object):
-    def __init__(self):
+    def __init__(self, num_dims=2):
+        self.num_dims = num_dims
+        self.dims = range(self.num_dims)
         self.node_to_coord = {}
         self.coord_to_node = {}
-        self.min_x = 0
-        self.max_x = 0
-        self.min_y = 0
-        self.max_y = 0
+        self.min = np.zeros(num_dims, dtype=int)
+        self.max = np.zeros(num_dims, dtype=int)
         self.gaps = set()
 
-    def add_node(self, node: Node, x: int, y: int):
-        self.node_to_coord[node] = (x, y)
-        self.coord_to_node[x, y] = node
+    def resize(self, min_: Coord, max_: Coord):
+        for dim_i in self.dims:
+            # Expand resized dimension in appropriate direction by adding gaps for all remaining
+            # dimensions in the expanded region.
+            expand_from = None
+            expand_to = None
+            if min_[dim_i] < self.min[dim_i]:
+                expand_from = min_[dim_i]
+                expand_to = self.min[dim_i] - 1
+                self.min[dim_i] = min_[dim_i]
 
-        # TODO: find a nicer, closed expression for these cases.
-        if x < self.min_x:
-            self.gaps |= {
-                (xi, yi)
-                for xi in range(x, self.min_x, 1)
-                for yi in range(self.min_y, self.max_y + 1)
-            }
-            self.min_x = x
-        elif x > self.max_x:
-            self.gaps |= {
-                (xi, yi)
-                for xi in range(x, self.max_x, -1)
-                for yi in range(self.min_y, self.max_y + 1)
-            }
-            self.max_x = x
-        if y < self.min_y:
-            self.gaps |= {
-                (xi, yi)
-                for xi in range(self.min_x, self.max_x + 1)
-                for yi in range(y, self.min_y, 1)
-            }
-            self.min_y = y
-        elif y > self.max_y:
-            self.gaps |= {
-                (xi, yi)
-                for xi in range(self.min_x, self.max_x + 1)
-                for yi in range(y, self.max_y, -1)
-            }
-            self.max_y = y
-        self.gaps -= {(x, y)}
+            if max_[dim_i] > self.max[dim_i]:
+                expand_from = self.max[dim_i] + 1
+                expand_to = max_[dim_i]
+                self.max[dim_i] = max_[dim_i]
+
+            if expand_from is not None:
+                dim_gaps = []
+                for dim_j in self.dims:
+                    if dim_i == dim_j:
+                        dim_gaps.append([x for x in range(expand_from, expand_to + 1)])
+                    else:
+                        dim_gaps.append([x for x in range(self.min[dim_j], self.max[dim_j] + 1)])
+
+                self.gaps |= set(tuple(gap) for gap in self._cartesian_product(*dim_gaps))
+
+    @staticmethod
+    def _cartesian_product(*arrays):
+        la = len(arrays)
+        arr = np.empty([len(a) for a in arrays] + [la], dtype=int)
+        for i, a in enumerate(np.ix_(*arrays)):
+            arr[..., i] = a
+        return arr.reshape(-1, la)
+
+    def add_node(self, node: Node, coord: Coord):
+        self.resize(np.minimum(self.min, coord), np.maximum(self.max, coord))
+        self.node_to_coord[node] = np.array(coord, dtype=int)
+        coord_fixed = tuple(coord)
+        self.coord_to_node[coord_fixed] = node
+
+        if coord_fixed in self.gaps:
+            self.gaps.remove(coord_fixed)
 
     @property
-    def aspect_ratio(self):
-        return (self.max_x - self.min_x) / (self.max_y - self.min_y)
-
-    @property
-    def area(self):
-        return (self.max_x - self.min_x) * (self.max_y - self.min_y)
+    def content(self):
+        return np.prod([self.max[dim_i] - self.min[dim_i] for dim_i in self.dims])
 
     @property
     def density(self):
-        return len(self.node_to_coord) / self.area
+        return len(self.node_to_coord) / self.content
 
     def node_neighbors(self, node: Node) -> Iterator[Node]:
         node_pos = self.node_to_coord.get(node)
@@ -67,72 +73,90 @@ class Lattice(object):
             return iter(())
         return self.coord_neighbors(*node_pos)
 
-    def coord_neighbors(self, x: int, y: int) -> Iterator[Node]:
+    def coord_neighbors(self, coord: Coord) -> Iterator[Node]:
         return (
-            self.coord_to_node[nx, ny] for nx, ny in self.neighbor_coords(x, y)
-            if (nx, ny) in self.coord_to_node
+            self.coord_to_node[tuple(coord)] for coord in self.neighbor_coords(coord)
+            if tuple(coord) in self.coord_to_node
         )
 
-    @staticmethod
-    def neighbor_coords(x: int, y: int) -> Iterator[Coord]:
-        return ((x + dx, y + dy) for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)])
+    def neighbor_coords(self, coord: Coord) -> Iterator[np.array]:
+        for dim_i in self.dims:
+            unit = np.zeros(self.num_dims, dtype=int)
+            unit[dim_i] = 1
+            yield coord + unit
+            yield coord - unit
 
     def node_distance(self, a: Node, b: Node):
-        ax, ay = self.node_to_coord[a]
-        bx, by = self.node_to_coord[b]
-        return self.coord_distance((ax, ay), (bx, by))
+        acoord = self.node_to_coord[a]
+        bcoord = self.node_to_coord[b]
+        return self.coord_distance(acoord, bcoord)
 
-    @staticmethod
-    def coord_distance(a: Coord, b: Coord):
-        ax, ay = a
-        bx, by = b
-        return abs(ax - bx) + abs(ay - by)
+    def coord_distance(self, a: Coord, b: Coord):
+        return sum(abs(a[dim_i] - b[dim_i]) for dim_i in self.dims)
 
     def get_free_coord(self) -> Coord:
         if self.gaps:
-            return next(iter(self.gaps))
+            return np.array(next(iter(self.gaps)))
 
         if not self.node_to_coord:
-            return 0, 0
+            return np.zeros(self.num_dims, dtype=int)
 
         # No more gaps. Extend lattice in shortest direction.
-        if self.max_x - self.min_x > self.max_y - self.min_y:
-            x = self.min_x + (self.max_x - self.min_x) // 2
-            y = self.min_y - 1 if self.max_y > abs(self.min_y) else self.max_y + 1
-        else:
-            x = self.min_x - 1 if self.max_x > abs(self.min_x) else self.max_x + 1
-            y = self.min_y + (self.max_y - self.min_y) // 2
+        # Tiebreak prefers expansion in positive direction.
+        _, dim_min = min((self.max[dim_i] - self.min[dim_i], dim_i) for dim_i in self.dims)
+        d_min, _, dir_min = min(
+            (abs(dir_extrema[dim_min]), tiebreak, dir)
+            for dir_extrema, tiebreak, dir in [(self.min, 1, -1), (self.max, 0, 1)]
+        )
+        x = self.min.copy()
+        x[dim_min] = dir_min * (d_min + 1)
 
-        return x, y
+        return x
 
-    def get_nodes_at_distance(self, node: Union[Node, Coord], distance: int) -> Iterator[Node]:
-        if isinstance(node, Node):
-            targets = self.get_nodes_at_distance(self.node_to_coord[node], distance)
-            for target in targets:
-                yield target
-        elif len(node) == 2:
-            x, y = node
-            for dx in range(-distance, distance + 1):
-                dy = distance - abs(dx)
-                for ysign in [-1, 1] if dy > 0 else [1]:
-                    xn, yn = x + dx, y + ysign * dy
-                    if (xn, yn) in self.coord_to_node:
-                        yield self.coord_to_node[xn, yn]
-        else:
-            raise ValueError
+    @property
+    def ascii(self) -> str:
+        if self.num_dims != 2:
+            return 'ASCII presentation only available in 2D lattices.'
 
-    def draw_ascii(self) -> str:
         display = ''
-        for y in range(self.max_y, self.min_y - 1, -1):
+        for y in range(self.max[1], self.min[1] - 1, -1):
             if y == 0:
                 display += '0 '
             else:
                 display += '  '
-            for x in range(self.min_x, self.max_x + 1, 1):
+            for x in range(self.min[0], self.max[0] + 1, 1):
                 display += 'X' if (x, y) in self.coord_to_node else 'O'
             display += '\n'
 
-        if self.min_x <= 0:
-            display += ' ' * (2 - self.min_x) + '0'
+        if self.min[0] <= 0:
+            display += ' ' * (2 - self.min[0]) + '0'
 
         return display
+
+
+class WovenLattice(Lattice):
+    def __init__(self, num_dims: int, min_order: int, max_order: int):
+        Lattice.__init__(self, num_dims)
+        self.min_order = min_order
+        self.max_order = max_order
+
+    def coord_neighbors(self, coord: Coord) -> Iterator[Node]:
+        lattice_neighbors = Lattice.coord_neighbors(self, coord)
+        try:
+            while True:
+                yield next(lattice_neighbors)
+        except StopIteration:
+            pass
+
+        # Additional long-range hops.
+        hop_dim = sum(coord) % self.num_dims
+        order_base = max(2, self.num_dims)
+        for order in range(self.min_order, self.max_order + 1):
+            distance = order_base**order
+            tcoord = coord.copy()
+            tcoord[hop_dim] += distance
+            if tuple(tcoord) in self.coord_to_node:
+                yield self.coord_to_node[tuple(tcoord)]
+            tcoord[hop_dim] -= 2 * distance
+            if tuple(tcoord) in self.coord_to_node:
+                yield self.coord_to_node[tuple(tcoord)]
