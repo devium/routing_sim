@@ -9,6 +9,12 @@ from raidensim.strategy.routing.routing_strategy import RoutingStrategy
 
 
 class GreedyRoutingStrategy(RoutingStrategy):
+    """
+    Routing based only on local information available to a node. From all partners every node
+    simply chooses the one with the highest priority (lowest in numbers).
+
+    Jon Kleinberg also calls this a "myopic" (short-sighted) routing strategy.
+    """
     def __init__(self, priority_strategy: PriorityStrategy, max_depth: int=50):
         self.priority_strategy = priority_strategy
         self.max_depth = max_depth
@@ -21,9 +27,13 @@ class GreedyRoutingStrategy(RoutingStrategy):
         for i in range(self.max_depth):
             visited.add(u)
             valid_partners = [
-                (self.priority_strategy.priority(raw, source, u, v, e, target, value), i_v, v)
-                for i_v, (v, e) in enumerate(raw[u].items())
+                (self.priority_strategy.priority(raw, source, u, v, e, target, value), tiebreak, v)
+                for tiebreak, (v, e) in enumerate(raw[u].items())
                 if v not in visited and e['capacity'] >= value
+            ]
+            valid_partners = [
+                (priority, tiebreak, partner) for priority, tiebreak, partner in valid_partners
+                if priority is not None
             ]
             if not valid_partners:
                 # Go back.

@@ -1,6 +1,5 @@
 from typing import Callable
 
-from raidensim.network.lattice import Lattice
 from raidensim.network.node import Node
 from raidensim.network.raw_network import RawNetwork
 from raidensim.types import Fullness

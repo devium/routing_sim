@@ -1,4 +1,5 @@
 import networkx as nx
+import time
 
 from raidensim.types import Path
 from raidensim.network.node import Node
@@ -46,7 +47,13 @@ class RawNetwork(nx.DiGraph):
 
     def reset_channels(self):
         bi_edges = {frozenset({u, v}) for u, v in self.edges}
-        for u, v in bi_edges:
+        tic = time.time()
+        for i, (u, v) in enumerate(bi_edges):
+            toc = time.time()
+            if toc - tic > 5:
+                tic = toc
+                print('Resetting channel {}/{}'.format(i, len(bi_edges)))
+
             uv = self[u][v]
             vu = self[v][u]
             uv['balance'] = 0

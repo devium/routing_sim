@@ -1,7 +1,7 @@
 import random
 import time
 from itertools import cycle
-from typing import List, Tuple, Callable
+from typing import List, Tuple, Callable, Iterable, Union
 
 import imageio
 import matplotlib.pyplot as plt
@@ -34,9 +34,13 @@ class Network(object):
                 tic = toc
                 print('Joining node {}/{}'.format(i, self.config.num_nodes))
 
-            uid = random.randrange(self.config.max_id)
-            fullness = self.config.fullness_dist.random()
-            node = Node(uid, fullness)
+            while True:
+                uid = random.randrange(self.config.max_id)
+                fullness = self.config.fullness_dist.random()
+                node = Node(uid, fullness)
+                if node not in self.raw:
+                    break
+
             self.raw.add_node(node)
             self.config.join_strategy.join(self.raw, node)
 
@@ -53,94 +57,74 @@ class Network(object):
 
     def draw(
             self,
+            nodes: List[Node] = None,
+            channels: List[Tuple[Node, Node]] = None,
             paths: List[Path] = None,
             highlighted_nodes: List[List[Node]] = None,
-            node_color_mapping: Callable[[Node], int] = None,
-            channel_color_mapping: Callable[[Node, Node], int] = None,
-            kademlia_center: int=0,
-            kademlia_buckets: List[Tuple[int,int]]=None,
+            node_color: Union[Callable[[Node], int], str] = 'grey',
+            channel_color: Union[Callable[[Node, Node], int], str] = 'lightgrey',
             draw_labels: bool=False,
-            heatmap_attr: str=None,
             filepath: str=None
     ) -> bool:
         pos = self.config.position_strategy.map(self.raw.nodes)
         first_pos = next(iter(pos.values()))
         if len(first_pos) > 2:
-            print('Warning: Cannot draw grids with rank higher than 2.')
+            print('Warning: Cannot draw networks with rank higher than 2.')
             return False
         elif len(first_pos) == 1:
             for node, pos_value in pos.items():
-                pos[node] = np.append(pos_value, 0)
+                pos[node] = np.append(pos_value, [0])
 
         plt.clf()
         fig = plt.gcf()
         fig.set_size_inches(12, 12)
         ax = fig.add_subplot(111)
         ax.axis('off')
+        xlim, ylim = self.config.position_strategy.plot_limits
+        ax.set_xlim(xlim)
+        ax.set_ylim(ylim)
 
-        colors = ['r', 'g', 'b', 'c']
-        color_cycle = cycle(colors)
+        node_colors = ['grey', 'r', 'g', 'b', 'c']
+        node_color_cycle = cycle(node_colors)
 
-        node_color = 'grey'
-        if node_color_mapping:
-            default_color = node_color
-            node_color = []
-            for node in self.raw.nodes:
-                mapping = node_color_mapping(node)
-                if mapping == -1:
-                    node_color.append(default_color)
-                else:
-                    node_color.append(colors[mapping % len(colors)])
+        channel_colors = ['lightgrey', 'r', 'g', 'b', 'c']
 
-        edge_color = 'lightgrey'
-        if channel_color_mapping:
-            default_color = edge_color
-            edge_color = []
-            for u, v in self.raw.edges:
-                mapping = channel_color_mapping(u, v)
-                if mapping == -1:
-                    edge_color.append(default_color)
-                else:
-                    edge_color.append(colors[mapping % len(colors)])
-
-        if heatmap_attr:
-            heatmap_values = [
-                abs(self.raw[a][b][heatmap_attr]) for a, b in self.raw.edges
+        if isinstance(node_color, Callable):
+            node_color = [node_colors[node_color(u) % len(node_colors)] for u in self.raw.nodes]
+        if isinstance(channel_color, Callable):
+            channel_color = [
+                channel_colors[channel_color(u, v) % len(channel_colors)] for u,v in self.raw.edges
             ]
-            max_ = max(max(heatmap_values), 1)
-            color = [x / max_ * 100 for x in heatmap_values]
-            nx.draw_networkx(
-                self.raw,
-                pos,
-                node_color=node_color,
-                edge_color=color,
-                edge_cmap=plt.cm.inferno,
-                node_size=1,
-                with_labels=False,
-                ax=ax,
-                arrows=False
-            )
-        else:
-            nx.draw_networkx(
-                self.raw,
-                pos,
-                node_color=node_color,
-                edge_color=edge_color,
-                node_size=1,
-                with_labels=False,
-                ax=ax,
-                arrows=False
-            )
+
+        nx.draw_networkx_nodes(
+            self.raw,
+            pos,
+            nodelist=nodes,
+            node_color=node_color,
+            node_size=1,
+            with_labels=False,
+            ax=ax
+        )
+        nx.draw_networkx_edges(
+            self.raw,
+            pos,
+            edgelist=channels,
+            edge_color=channel_color,
+            arrows=False,
+            ax=ax
+        )
         if paths:
             edges = []
             for path in paths:
                 for i in range(len(path) - 1):
                     edges.append((path[i], path[i+1]))
-            nx.draw_networkx_edges(self.raw, pos, edgelist=edges, edge_color='b', arrows=False)
+            nx.draw_networkx_edges(
+                self.raw, pos, edgelist=edges, edge_color='b', arrows=False, ax=ax
+            )
 
         if draw_labels:
             labels = {node: node.uid for node in self.raw.nodes}
-            nx.draw_networkx_labels(self.raw, pos, labels, font_size=5)
+            nx.draw_networkx_labels(self.raw, pos, labels, font_size=6)
 
         if highlighted_nodes:
             for highlighted_node_set in highlighted_nodes:
@@ -149,20 +133,9 @@ class Network(object):
                     pos,
                     nodelist=highlighted_node_set,
                     node_size=8,
-                    node_color=next(color_cycle)
+                    node_color=next(node_color_cycle),
+                    ax=ax
                 )
-
-        if kademlia_buckets:
-            for bucket in kademlia_buckets:
-                lcenter = kademlia_center - bucket[0] - (bucket[1] - bucket[0]) // 2
-                rcenter = kademlia_center + bucket[0] + (bucket[1] - bucket[0]) // 2
-                width = bucket[1] - bucket[0]
-
-                color = next(color_cycle)
-                sangle, eangle = self._calc_sector_angles(lcenter, width)
-                ax.add_artist(Wedge((0, 0), 2, sangle, eangle, color=color, alpha=0.1))
-                sangle, eangle = self._calc_sector_angles(rcenter, width)
-                ax.add_artist(Wedge((0, 0), 2, sangle, eangle, color=color, alpha=0.1))
 
         if filepath:
             os.makedirs(os.path.dirname(filepath), exist_ok=True)
@@ -179,11 +152,12 @@ class Network(object):
             path_history: List[Path],
             max_frames: int,
             dirpath: str,
-            channel_color_mapping: Callable[[Node, Node], int] = None,
+            channel_color: Union[Callable[[Node, Node], int], str] = 'lightgrey',
     ):
         visited = {source}
         gif_filenames = []
 
+        os.makedirs(dirpath, exist_ok=True)
         for isp, subpath in enumerate(path_history):
             visited |= set(subpath)
             if isp > max_frames - 1:
@@ -191,9 +165,11 @@ class Network(object):
             filename = 'step_{:04d}.png'.format(isp)
             gif_filenames.append(filename)
             if not self.draw(
-                [subpath], [visited, [source, target]],
+                channels=[],
+                paths=[subpath],
+                highlighted_nodes=[visited, [source, target]],
                 filepath=os.path.join(dirpath, filename),
-                channel_color_mapping=channel_color_mapping
+                channel_color=channel_color
             ):
                 return
 

@@ -1,10 +1,11 @@
-from typing import Union, Iterable
+from typing import Union, Iterable, Tuple
 
 import math
 
 import numpy as np
 from raidensim.network.lattice import Lattice
 from raidensim.network.node import Node
+from raidensim.types import FloatRange
 
 
 class PositionStrategy(object):
@@ -20,6 +21,10 @@ class PositionStrategy(object):
             raise ValueError
 
     def distance(self, a: Node, b: Node):
+        raise NotImplementedError
+
+    @property
+    def plot_limits(self) -> Tuple[FloatRange, FloatRange]:
         raise NotImplementedError
 
 
@@ -42,6 +47,10 @@ class RingPositionStrategy(PositionStrategy):
     def distance(self, a: Node, b: Node):
         return min((a.uid - b.uid) % self.max_id, (b.uid - a.uid) % self.max_id)
 
+    @property
+    def plot_limits(self) -> Tuple[FloatRange, FloatRange]:
+        return (-2, 2), (-2, 2)
+
 
 class LatticePositionStrategy(PositionStrategy):
     def __init__(self, lattice: Lattice):
@@ -52,3 +61,11 @@ class LatticePositionStrategy(PositionStrategy):
 
     def distance(self, a: Node, b: Node):
         return self.lattice.node_distance(a, b)
+
+    @property
+    def plot_limits(self) -> Tuple[FloatRange, FloatRange]:
+        min_, max_ = self.lattice.min, self.lattice.max
+        if self.lattice.num_dims < 2:
+            return (min_[0] - 1, max_[0] + 1), (-0.5, 0.5)
+        else:
+            return (min_[0] - 1, max_[0] + 1), (min_[1] - 1, max_[1] + 1)

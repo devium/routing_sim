@@ -1,7 +1,7 @@
-from .balancing import simulate_balancing
+from .scaling import simulate_scaling
 from .routing import simulate_routing
 
 __all__ = [
-    'simulate_balancing',
+    'simulate_scaling',
     'simulate_routing'
 ]

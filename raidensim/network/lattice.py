@@ -67,6 +67,10 @@ class Lattice(object):
     def density(self):
         return len(self.node_to_coord) / self.content
 
+    @property
+    def num_required_channels(self):
+        return self.num_dims * 2
+
     def node_neighbors(self, node: Node) -> Iterator[Node]:
         node_pos = self.node_to_coord.get(node)
         if not node_pos:
@@ -135,10 +139,17 @@ class Lattice(object):
 
 
 class WovenLattice(Lattice):
-    def __init__(self, num_dims: int, min_order: int, max_order: int):
+    def __init__(self, num_dims: int, weave_base_factor: int, min_order: int, max_order: int):
         Lattice.__init__(self, num_dims)
+        assert weave_base_factor > 0
+        assert max_order >= min_order > 0
+        self.weave_base_factor = weave_base_factor
         self.min_order = min_order
         self.max_order = max_order
+
+    @property
+    def num_required_channels(self):
+        return super().num_required_channels + 2 * (self.max_order - self.min_order + 1)
 
     def coord_neighbors(self, coord: Coord) -> Iterator[Node]:
         lattice_neighbors = Lattice.coord_neighbors(self, coord)
@@ -150,7 +161,7 @@ class WovenLattice(Lattice):
 
         # Additional long-range hops.
         hop_dim = sum(coord) % self.num_dims
-        order_base = max(2, self.num_dims)
+        order_base = max(2, self.num_dims) * self.weave_base_factor
         for order in range(self.min_order, self.max_order + 1):
             distance = order_base**order
             tcoord = coord.copy()

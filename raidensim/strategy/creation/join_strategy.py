@@ -42,6 +42,10 @@ class JoinStrategy(object):
     def join(self, raw: RawNetwork, node: Node):
         raise NotImplementedError
 
+    @property
+    def num_required_channels(self):
+        raise NotImplementedError
+
 
 class DefaultJoinStrategy(JoinStrategy):
     def __init__(
@@ -72,6 +76,10 @@ class DefaultJoinStrategy(JoinStrategy):
                 max_initiated_channels - node['num_initiated_channels'],
                 max_initiated_channels
             ))
+
+    @property
+    def num_required_channels(self):
+        return 0
 
 
 class SimpleJoinStrategy(DefaultJoinStrategy):
@@ -209,3 +217,7 @@ class RaidenLatticeJoinStrategy(JoinStrategy):
         neighbors = [neighbor for neighbor in neighbors if (node, neighbor) not in raw.edges]
         for partner in neighbors:
             self.lattice_connection_strategy.connect(raw, node, partner)
+
+    @property
+    def num_required_channels(self):
+        return self.lattice.num_required_channels
