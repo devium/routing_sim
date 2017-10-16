@@ -5,6 +5,7 @@ import time
 from typing import List, Dict, Union
 
 import matplotlib.pyplot as plt
+import matplotlib.ticker as mtick
 
 from raidensim.network.network import Network
 from raidensim.network.node import Node
@@ -191,24 +192,45 @@ def plot_stats(
     max_net_balance = max(max(pre_stats.net_balances), max(post_stats.net_balances))
     max_imbalance = max(max(pre_stats.imbalances), max(post_stats.imbalances))
     max_num_channels = max(pre_stats.channel_counts)
+    max_distance = max(pre_stats.channel_distances)
 
     # Plots.
     fig, axs = plt.subplots(3, 4)
-    fig.set_size_inches(16, 10)
+    fig.set_size_inches(18, 10)
 
-    axs[0][0].hist(pre_stats.capacities, bins=80, edgecolor='black', range=[0, max_capacity])
-    axs[1][0].hist(post_stats.capacities, bins=80, edgecolor='black', range=[0, max_capacity])
-    axs[0][1].hist(pre_stats.net_balances, bins=80, range=[0, max_net_balance], edgecolor='black')
-    axs[1][1].hist(post_stats.net_balances, bins=80, range=[0, max_net_balance], edgecolor='black')
-    axs[0][2].hist(pre_stats.imbalances, bins=80, range=[0, max_imbalance], edgecolor='black')
-    axs[1][2].hist(post_stats.imbalances, bins=80, range=[0, max_imbalance], edgecolor='black')
+    styling = {
+        'align': 'left',
+        'edgecolor': 'black'
+    }
+    axs[0][0].hist(
+        pre_stats.capacities, bins=range(max_capacity + 2), range=[0, max_capacity], **styling
+    )
+    axs[1][0].hist(
+        post_stats.capacities, bins=range(max_capacity + 2), range=[0, max_capacity], **styling
+    )
+    axs[0][1].hist(
+        pre_stats.net_balances, bins=range(max_net_balance + 2), range=[0, max_net_balance],
+        **styling
+    )
+    axs[1][1].hist(
+        post_stats.net_balances, bins=range(max_net_balance + 2), range=[0, max_net_balance],
+        **styling
+    )
+    axs[0][2].hist(
+        pre_stats.imbalances, bins=range(max_imbalance + 2), range=[0, max_imbalance], **styling
+    )
+    axs[1][2].hist(
+        post_stats.imbalances, bins=range(max_imbalance + 2), range=[0, max_imbalance], **styling
+    )
     axs[0][3].hist(
-        pre_stats.channel_counts, bins=range(max_num_channels + 2), align='left', edgecolor='black'
+        pre_stats.channel_counts, bins=range(max_num_channels + 2), **styling
     )
     axs[2][0].hist(
         sim_stats.failed, bins=80, range=[0, sim_stats.num_transfers], edgecolor='black'
     )
-    freq, _, _ = axs[2][1].hist(pre_stats.channel_distances, bins=50, edgecolor='black')
+    freq, _, _ = axs[2][1].hist(
+        pre_stats.channel_distances, bins=range(max_distance + 2), **styling
+    )
 
     # Stats plot (labels only).
     labels = [
@@ -217,7 +239,7 @@ def plot_stats(
         'Bottom row: after {} transfers'.format(sim_stats.num_transfers),
         '',
         'Nodes: {}'.format(pre_stats.num_nodes),
-        'Channels: {}'.format(pre_stats.num_channels_uni // 2),
+        'Channels (unidirectional): {}'.format(pre_stats.num_channels_uni),
         'Required channels/node: {}'.format(pre_stats.num_required_channels),
         'Transfers: {}'.format(sim_stats.num_transfers),
         '',
@@ -234,18 +256,50 @@ def plot_stats(
     for i, label in enumerate(labels):
         axs[1][3].text(0, 0.95 - i * 0.07, label)
 
+    formatter = mtick.EngFormatter()
+
     axs[0][0].set_ylabel('Distribution')
     axs[1][0].set_ylabel('Distribution')
+
     axs[1][0].set_xlabel('Channel capacity')
+    axs[0][0].xaxis.set_ticks(range(0, max_capacity + 1, 2))
+    axs[0][0].xaxis.set_ticks(range(1, max_capacity + 1, 2), minor=True)
+    axs[1][0].xaxis.set_ticks(range(0, max_capacity + 1, 2))
+    axs[1][0].xaxis.set_ticks(range(1, max_capacity + 1, 2), minor=True)
+    axs[0][0].yaxis.set_major_formatter(formatter)
+    axs[1][0].yaxis.set_major_formatter(formatter)
+
     axs[1][1].set_xlabel('Channel net balance (abs)')
+    axs[0][1].xaxis.set_ticks(range(0, max_net_balance + 1, 2))
+    axs[0][1].xaxis.set_ticks(range(1, max_net_balance + 1, 2), minor=True)
+    axs[1][1].xaxis.set_ticks(range(0, max_net_balance + 1, 2))
+    axs[1][1].xaxis.set_ticks(range(1, max_net_balance + 1, 2), minor=True)
+    axs[0][1].yaxis.set_major_formatter(formatter)
+    axs[1][1].yaxis.set_major_formatter(formatter)
+
     axs[1][2].set_xlabel('Channel imbalance')
+    axs[0][2].xaxis.set_ticks(range(0, max_imbalance + 1, 2))
+    axs[0][2].xaxis.set_ticks(range(1, max_imbalance + 1, 2), minor=True)
+    axs[1][2].xaxis.set_ticks(range(0, max_imbalance + 1, 2))
+    axs[1][2].xaxis.set_ticks(range(1, max_imbalance + 1, 2), minor=True)
+    axs[0][2].yaxis.set_major_formatter(formatter)
+    axs[1][2].yaxis.set_major_formatter(formatter)
+
     axs[0][3].set_xlabel('Channel count per node')
     axs[0][3].xaxis.set_ticks(range(0, max_num_channels + 1, 2))
     axs[0][3].xaxis.set_ticks(range(1, max_num_channels + 1, 2), minor=True)
-    axs[1][3].axis('off')
+    axs[0][3].yaxis.set_major_formatter(formatter)
+
     axs[2][0].set_xlabel('Transfer #')
     axs[2][0].set_ylabel('Failed transfers')
+    axs[2][0].yaxis.set_major_formatter(formatter)
+
     axs[2][1].set_xlabel('Channel distances > 1')
+    axs[2][1].xaxis.set_ticks(range(0, max_distance + 1, 5))
+    axs[2][1].xaxis.set_ticks(range(0, max_distance + 1, 1), minor=True)
+    axs[2][1].yaxis.set_major_formatter(formatter)
+
+    axs[1][3].axis('off')
     axs[2][2].axis('off')
     axs[2][3].axis('off')
 

@@ -25,7 +25,7 @@ SCRIPT_DIR = os.path.dirname(__file__)
 OUT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, '../out'))
 
 
-NUM_NODES = 100000
+NUM_NODES = 10000
 
 MAX_ID = 2**32
 WEAVE_BASE_FACTOR = 2
@@ -69,7 +69,7 @@ def run():
     # Routing simulation + animation.
     routing_strategies = [('greedy_distance', distance_greedy_routing)]
 
-    if False:
+    if True:
         simulate_routing(
             net,
             dirpath,
@@ -88,7 +88,7 @@ def run():
             simulate_scaling(
                 net,
                 dirpath,
-                num_transfers=1000,
+                num_transfers=100000,
                 transfer_value=1,
                 routing_strategy=routing_strategy,
                 fee_strategy=fee_strategy,
