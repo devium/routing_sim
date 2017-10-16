@@ -26,6 +26,7 @@ OUT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, '../out'))
 
 
 NUM_NODES = 10000
+NODE_FAILURE_RATE = 0.1
 
 MAX_ID = 2**32
 WEAVE_BASE_FACTOR = 2
@@ -63,6 +64,7 @@ def run():
 
     random.seed(0)
     net = Network(config)
+    net.raw.freeze_random_nodes(int(NUM_NODES * NODE_FAILURE_RATE))
 
     # Routing simulation + animation.
     routing_strategies = [
@@ -71,12 +73,12 @@ def run():
     ]
 
     # Network scaling simulation.
-    if True:
+    if False:
         for name, routing_strategy in routing_strategies:
             simulate_scaling(
                 net,
                 dirpath,
-                num_transfers=1000,
+                num_transfers=10000,
                 transfer_value=1,
                 position_strategy=config.position_strategy,
                 routing_strategy=routing_strategy,
@@ -86,12 +88,12 @@ def run():
                 execute_transfers=True
             )
 
-    if False:
+    if True:
         simulate_routing(
             net,
             dirpath,
             num_sample_nodes=5,
-            num_paths=5,
+            num_paths=3,
             transfer_value=1,
             routing_strategies=routing_strategies,
             max_gif_frames=30

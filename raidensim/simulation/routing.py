@@ -73,13 +73,15 @@ def plot_sample_routes(
         max_gif_frames: int,
         dirpath: str
 ):
-    # cn.nodes order is non-deterministic. Sort for reproducible sampling.
-    nodes_sorted = sorted(net.raw.nodes, key=lambda u: u.uid)
+    def channel_filter(u: Node, v: Node, e: dict) -> bool:
+        return net.config.position_strategy.distance(u, v) == 1
+
     for ip in range(num_paths):
         print('Path #{}'.format(ip))
         dirpath = os.path.join(dirpath, 'nodes_{}'.format(ip))
         os.makedirs(dirpath, exist_ok=True)
-        source, target = random.sample(nodes_sorted, 2)
+
+        source, target = net.raw.get_available_nodes(transfer_value, channel_filter)
         net.draw(highlighted_nodes=[[], [source, target]], filepath=os.path.join(dirpath, 'nodes'))
 
         for ir, routing_strategy in enumerate(routing_strategies):

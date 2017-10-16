@@ -1,3 +1,6 @@
+import random
+from typing import Tuple, Callable
+
 import networkx as nx
 import time
 
@@ -24,6 +27,7 @@ class RawNetwork(nx.DiGraph):
 
     def __init__(self):
         nx.DiGraph.__init__(self)
+        self.frozen_edges = []
 
     def remove_isolated(self):
         connected_nodes = {node for edge in self.edges for node in edge}
@@ -60,6 +64,46 @@ class RawNetwork(nx.DiGraph):
             vu['balance'] = 0
             self.update_channel_cache(u, v, uv, vu)
 
+    def freeze_random_nodes(self, num_nodes: int):
+        """
+        Freeze all incoming edges of a set of random nodes.
+        """
+        self.unfreeze_nodes()
+        freeze_nodes = random.sample(self.nodes, num_nodes)
+        self.frozen_edges += [
+            edge for node in freeze_nodes for edge in self.out_edges(node, data=True)
+        ]
+        self.frozen_edges += [
+            edge for node in freeze_nodes for edge in self.in_edges(node, data=True)
+        ]
+        self.remove_edges_from(self.frozen_edges)
+        self.remove_nodes_from(freeze_nodes)
+
+    def unfreeze_nodes(self):
+        self.add_edges_from(self.frozen_edges)
+        self.frozen_edges = []
+
+    def get_available_nodes(
+            self, transfer_value: int, channel_filter: Callable[[Node, Node, dict], bool]=None
+    ) -> Tuple[Node, Node]:
+        for i in range(1000):
+            source, target = random.sample(self.nodes, 2)
+            if any(
+                True for u, v, e in self.out_edges(source, data=True) if channel_filter(u, v, e)
+            ) and any(
+                e['capacity'] >= transfer_value
+                for u, v, e in self.out_edges(source, data=True)
+                if not channel_filter or channel_filter(u, v, e)
+            ) and any(
+                True for u, v, e in self.in_edges(target, data=True) if channel_filter(u, v, e)
+            ) and any(
+                e['deposit'] - e['net_balance'] + e['imbalance'] >= transfer_value
+                for u, v, e in self.in_edges(target, data=True)
+                if not channel_filter or channel_filter(u, v, e)
+            ):
+                return source, target
+        raise ValueError('Max attempts of finding transfer nodes reached.')
+
     def update_channel_cache(self, u: Node, v: Node, uv: dict=None, vu: dict=None):
         if uv is None:
             uv = self[u].get(v)
@@ -88,5 +132,4 @@ class RawNetwork(nx.DiGraph):
             uv['balance'] += value
             uv['num_transfers'] += 1
             vu['num_transfers'] += 1
-            # Update redundant/cached values for faster Dijkstra routing.
             self.update_channel_cache(u, v, uv, vu)

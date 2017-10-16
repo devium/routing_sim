@@ -129,6 +129,9 @@ def simulate_transfers(
         num_transfers, len(raw.nodes), num_channels_uni // 2
     ))
 
+    def channel_filter(u: Node, v: Node, e: dict) -> bool:
+        return position_strategy.distance(u, v) == 1
+
     stats = SimulationStats()
     tic = time.time()
     subtic = tic
@@ -139,13 +142,7 @@ def simulate_transfers(
             subtic = toc
             print('Transfer {}/{}'.format(i + 1, num_transfers))
 
-        source, target = random.sample(raw.nodes, 2)
-        # Repick nodes that cannot send or receive transfers anymore.
-        while all(e['capacity'] < transfer_value for e in raw[source].values()) and all(
-            e['deposit'] - e['net_balance'] + e['imbalance'] < transfer_value
-            for e in raw[target].values()
-        ):
-            source, target = random.sample(raw.nodes, 2)
+        source, target = raw.get_available_nodes(transfer_value, channel_filter)
 
         path, path_history = routing_strategy.route(raw, source, target, transfer_value)
         if path:
