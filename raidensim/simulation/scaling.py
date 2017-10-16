@@ -11,6 +11,7 @@ from raidensim.network.network import Network
 from raidensim.network.node import Node
 from raidensim.network.raw_network import RawNetwork
 from raidensim.strategy.fee_strategy import FeeStrategy
+from raidensim.strategy.position_strategy import PositionStrategy
 from raidensim.strategy.routing.routing_strategy import RoutingStrategy
 from raidensim.types import Path
 
@@ -46,10 +47,14 @@ class SimulationStats:
     avg_transfer_hops = 0
     avg_contacted = 0
     avg_fee = 0
+    avg_fee_per_distance = 0
 
     def __init__(self):
+        self.transfer_hops = []
         self.failed = []
         self.failure_recordings = []
+        self.fees = []
+        self.fees_per_distance = []
 
 
 def simulate_scaling(
@@ -58,6 +63,7 @@ def simulate_scaling(
         num_transfers: int,
         transfer_value: int,
         fee_strategy: FeeStrategy,
+        position_strategy: PositionStrategy,
         routing_strategy: RoutingStrategy,
         name: str,
         max_recorded_failures: int,
@@ -76,6 +82,7 @@ def simulate_scaling(
         net.raw,
         num_transfers,
         transfer_value,
+        position_strategy,
         routing_strategy,
         fee_strategy,
         execute_transfers,
@@ -107,6 +114,7 @@ def simulate_transfers(
         raw: RawNetwork,
         num_transfers: int,
         transfer_value: int,
+        position_strategy: PositionStrategy,
         routing_strategy: RoutingStrategy,
         fee_strategy: FeeStrategy,
         execute_transfers: bool,
@@ -140,7 +148,22 @@ def simulate_transfers(
             source, target = random.sample(raw.nodes, 2)
 
         path, path_history = routing_strategy.route(raw, source, target, transfer_value)
-        if not path:
+        if path:
+            fee = get_path_fee(raw, path, fee_strategy, transfer_value)
+            stats.avg_fee += fee
+            stats.fees.append((i, fee))
+
+            distance = position_strategy.distance(source, target)
+            fee_per_distance = fee / distance
+            stats.avg_fee_per_distance += fee_per_distance
+            stats.fees_per_distance.append((distance, fee))
+            if execute_transfers:
+                raw.do_transfer(path, transfer_value)
+
+            stats.transfer_hops.append(len(path))
+            stats.avg_transfer_hops += len(path)
+            stats.avg_contacted += len({node for subpath in path_history for node in subpath})
+        else:
             print('No Path found from {} to {} that could sustain {} token(s).'.format(
                 source, target, transfer_value
             ))
@@ -151,18 +174,13 @@ def simulate_transfers(
                     'target': target,
                     'path_history': path_history
                 })
-        else:
-            stats.avg_fee += get_path_fee(raw, path, fee_strategy, transfer_value)
-            if execute_transfers:
-                raw.do_transfer(path, transfer_value)
-            stats.avg_transfer_hops += len(path)
-            stats.avg_contacted += len({node for subpath in path_history for node in subpath})
 
     toc = time.time()
     num_success = num_transfers - len(stats.failed)
     stats.num_transfers = num_transfers
     stats.name = name
     stats.avg_fee /= num_success
+    stats.avg_fee_per_distance /= num_success
     stats.avg_transfer_hops /= num_success
     stats.avg_contacted /= num_success
     print('Finished after {} seconds. {} transfers failed.'.format(toc - tic, len(stats.failed)))
@@ -193,115 +211,159 @@ def plot_stats(
     max_imbalance = max(max(pre_stats.imbalances), max(post_stats.imbalances))
     max_num_channels = max(pre_stats.channel_counts)
     max_distance = max(pre_stats.channel_distances)
+    max_transfer_hops = max(sim_stats.transfer_hops)
 
     # Plots.
-    fig, axs = plt.subplots(3, 4)
-    fig.set_size_inches(18, 10)
+    fig, axs = plt.subplots(3, 5)
+    fig.set_size_inches(22, 10)
 
     styling = {
         'align': 'left',
         'edgecolor': 'black'
     }
-    axs[0][0].hist(
+
+    def add_labels(ax, labels: List[str], align='right'):
+        x = 0.97 if align == 'right' else 0.03
+        for line, label in enumerate(labels):
+            ax.text(
+                x, 0.93 - line * 0.07, label, transform=ax.transAxes, horizontalalignment=align
+            )
+
+    formatter = mtick.EngFormatter()
+
+    ax = axs[0][0]
+    ax.set_title('Channel capacity before')
+    ax.hist(
         pre_stats.capacities, bins=range(max_capacity + 2), range=[0, max_capacity], **styling
     )
-    axs[1][0].hist(
+    add_labels(ax, ['Depleted: {}'.format(pre_stats.num_depleted_channels)])
+    ax.yaxis.set_major_formatter(formatter)
+    ax.xaxis.set_ticks(range(0, max_capacity + 1, 5))
+    ax.xaxis.set_ticks(range(0, max_capacity + 1, 1), minor=True)
+
+    ax = axs[1][0]
+    ax.set_title('Channel capacity after')
+    ax.hist(
         post_stats.capacities, bins=range(max_capacity + 2), range=[0, max_capacity], **styling
     )
-    axs[0][1].hist(
+    add_labels(ax, ['Depleted: {}'.format(post_stats.num_depleted_channels)])
+    ax.xaxis.set_ticks(range(0, max_capacity + 1, 5))
+    ax.xaxis.set_ticks(range(0, max_capacity + 1, 1), minor=True)
+    ax.yaxis.set_major_formatter(formatter)
+
+    ax = axs[0][1]
+    ax.set_title('Abs. channel net balance before')
+    ax.hist(
         pre_stats.net_balances, bins=range(max_net_balance + 2), range=[0, max_net_balance],
         **styling
     )
-    axs[1][1].hist(
+    add_labels(ax, ['SD: {:.2f}'.format(pre_stats.net_balance_stdev)])
+    ax.xaxis.set_ticks(range(0, max_net_balance + 1, 5))
+    ax.xaxis.set_ticks(range(0, max_net_balance + 1, 1), minor=True)
+    ax.yaxis.set_major_formatter(formatter)
+
+    ax = axs[1][1]
+    ax.set_title('Abs. channel net balance after')
+    ax.hist(
         post_stats.net_balances, bins=range(max_net_balance + 2), range=[0, max_net_balance],
         **styling
     )
-    axs[0][2].hist(
+    add_labels(ax, ['SD: {:.2f}'.format(post_stats.net_balance_stdev)])
+    ax.xaxis.set_ticks(range(0, max_net_balance + 1, 5))
+    ax.xaxis.set_ticks(range(0, max_net_balance + 1, 1), minor=True)
+    ax.yaxis.set_major_formatter(formatter)
+
+    ax = axs[0][2]
+    ax.set_title('Channel imbalance before')
+    ax.hist(
         pre_stats.imbalances, bins=range(max_imbalance + 2), range=[0, max_imbalance], **styling
     )
-    axs[1][2].hist(
+    add_labels(ax, ['SD: {:.2f}'.format(pre_stats.imbalance_stdev)])
+    ax.xaxis.set_ticks(range(0, max_imbalance + 1, 5))
+    ax.xaxis.set_ticks(range(0, max_imbalance + 1, 1), minor=True)
+    ax.yaxis.set_major_formatter(formatter)
+
+    ax = axs[1][2]
+    ax.set_title('Channel imbalance after')
+    ax.hist(
         post_stats.imbalances, bins=range(max_imbalance + 2), range=[0, max_imbalance], **styling
     )
-    axs[0][3].hist(
+    add_labels(ax, ['SD: {:.2f}'.format(post_stats.imbalance_stdev)])
+    ax.xaxis.set_ticks(range(0, max_imbalance + 1, 5))
+    ax.xaxis.set_ticks(range(0, max_imbalance + 1, 1), minor=True)
+    ax.yaxis.set_major_formatter(formatter)
+
+    ax = axs[0][3]
+    ax.set_title('Channel count per node')
+    ax.hist(
         pre_stats.channel_counts, bins=range(max_num_channels + 2), **styling
     )
-    axs[2][0].hist(
-        sim_stats.failed, bins=80, range=[0, sim_stats.num_transfers], edgecolor='black'
-    )
-    freq, _, _ = axs[2][1].hist(
+    ax.xaxis.set_ticks(range(0, max_num_channels + 1, 2))
+    ax.xaxis.set_ticks(range(0, max_num_channels + 1, 1), minor=True)
+    ax.yaxis.set_major_formatter(formatter)
+
+    ax = axs[0][4]
+    ax.set_title('Channel distances > 1')
+    freq, _, _ = ax.hist(
         pre_stats.channel_distances, bins=range(max_distance + 2), **styling
     )
+    ax.xaxis.set_ticks(range(0, max_distance + 1, 10))
+    ax.xaxis.set_ticks(range(0, max_distance + 1, 1), minor=True)
+    ax.yaxis.set_major_formatter(formatter)
+
+    ax = axs[1][3]
+    ax.set_title('Failed transfers over time')
+    ax.hist(
+        sim_stats.failed, bins=80, range=[0, sim_stats.num_transfers], edgecolor='black'
+    )
+    add_labels(ax, ['Total: {}'.format(len(sim_stats.failed))])
+    ax.yaxis.set_major_formatter(formatter)
+
+    ax = axs[2][0]
+    ax.set_title('Fees over time')
+    transfer_ids, fees = zip(*sim_stats.fees)
+    bin_scale = sim_stats.num_transfers / 80
+    fees = [fee / bin_scale for fee in fees]
+    ax.hist(transfer_ids, bins=80, weights=fees, **styling)
+    add_labels(ax, ['Mean: {:.2f}'.format(sim_stats.avg_fee)])
+    ax.yaxis.set_major_formatter(formatter)
+
+    ax = axs[2][1]
+    ax.set_title('Fee per distance')
+    distances, fees = zip(*sim_stats.fees_per_distance)
+    ax.scatter(distances, fees, s=1, marker='+')
+    add_labels(ax, ['Mean fee per distance: {:.2f}'.format(sim_stats.avg_fee_per_distance)])
+    ax.yaxis.set_major_formatter(formatter)
+
+    ax = axs[2][2]
+    ax.set_title('Hops per transfer')
+    ax.hist(
+        sim_stats.transfer_hops, bins=range(max_transfer_hops + 2), range=[0, max_transfer_hops],
+        **styling
+    )
+    add_labels(ax, ['Mean: {:.2f}'.format(sim_stats.avg_transfer_hops)])
+    ax.xaxis.set_ticks(range(0, max_transfer_hops + 1, 5))
+    ax.xaxis.set_ticks(range(0, max_transfer_hops + 1, 1), minor=True)
+    ax.yaxis.set_major_formatter(formatter)
 
     # Stats plot (labels only).
+    ax = axs[1][4]
     labels = [
         'Simulation name: {}'.format(sim_stats.name),
-        'Top row: initial network state',
-        'Bottom row: after {} transfers'.format(sim_stats.num_transfers),
         '',
         'Nodes: {}'.format(pre_stats.num_nodes),
         'Channels (unidirectional): {}'.format(pre_stats.num_channels_uni),
         'Required channels/node: {}'.format(pre_stats.num_required_channels),
         'Transfers: {}'.format(sim_stats.num_transfers),
         '',
-        'Failed transfers: {}'.format(len(sim_stats.failed)),
-        'Average transfer hops: {:.2f}'.format(sim_stats.avg_transfer_hops),
-        'Average nodes contacted: {:.2f}'.format(sim_stats.avg_contacted),
-        'Average fee: {:.2f}'.format(sim_stats.avg_fee),
-        'Balance SD before: {:.2f}'.format(pre_stats.net_balance_stdev),
-        'Balance SD after: {:.2f}'.format(post_stats.net_balance_stdev),
-        'Imbalance SD before: {:.2f}'.format(pre_stats.imbalance_stdev),
-        'Imbalance SD after: {:.2f}'.format(post_stats.imbalance_stdev),
-        'Depleted channels: {}'.format(post_stats.num_depleted_channels)
+        'Average nodes contacted: {:.2f}'.format(sim_stats.avg_contacted)
     ]
-    for i, label in enumerate(labels):
-        axs[1][3].text(0, 0.95 - i * 0.07, label)
+    for line, label in enumerate(labels):
+        ax.text(0, 0.95 - line * 0.07, label)
 
-    formatter = mtick.EngFormatter()
-
-    axs[0][0].set_ylabel('Distribution')
-    axs[1][0].set_ylabel('Distribution')
-
-    axs[1][0].set_xlabel('Channel capacity')
-    axs[0][0].xaxis.set_ticks(range(0, max_capacity + 1, 2))
-    axs[0][0].xaxis.set_ticks(range(1, max_capacity + 1, 2), minor=True)
-    axs[1][0].xaxis.set_ticks(range(0, max_capacity + 1, 2))
-    axs[1][0].xaxis.set_ticks(range(1, max_capacity + 1, 2), minor=True)
-    axs[0][0].yaxis.set_major_formatter(formatter)
-    axs[1][0].yaxis.set_major_formatter(formatter)
-
-    axs[1][1].set_xlabel('Channel net balance (abs)')
-    axs[0][1].xaxis.set_ticks(range(0, max_net_balance + 1, 2))
-    axs[0][1].xaxis.set_ticks(range(1, max_net_balance + 1, 2), minor=True)
-    axs[1][1].xaxis.set_ticks(range(0, max_net_balance + 1, 2))
-    axs[1][1].xaxis.set_ticks(range(1, max_net_balance + 1, 2), minor=True)
-    axs[0][1].yaxis.set_major_formatter(formatter)
-    axs[1][1].yaxis.set_major_formatter(formatter)
-
-    axs[1][2].set_xlabel('Channel imbalance')
-    axs[0][2].xaxis.set_ticks(range(0, max_imbalance + 1, 2))
-    axs[0][2].xaxis.set_ticks(range(1, max_imbalance + 1, 2), minor=True)
-    axs[1][2].xaxis.set_ticks(range(0, max_imbalance + 1, 2))
-    axs[1][2].xaxis.set_ticks(range(1, max_imbalance + 1, 2), minor=True)
-    axs[0][2].yaxis.set_major_formatter(formatter)
-    axs[1][2].yaxis.set_major_formatter(formatter)
-
-    axs[0][3].set_xlabel('Channel count per node')
-    axs[0][3].xaxis.set_ticks(range(0, max_num_channels + 1, 2))
-    axs[0][3].xaxis.set_ticks(range(1, max_num_channels + 1, 2), minor=True)
-    axs[0][3].yaxis.set_major_formatter(formatter)
-
-    axs[2][0].set_xlabel('Transfer #')
-    axs[2][0].set_ylabel('Failed transfers')
-    axs[2][0].yaxis.set_major_formatter(formatter)
-
-    axs[2][1].set_xlabel('Channel distances > 1')
-    axs[2][1].xaxis.set_ticks(range(0, max_distance + 1, 5))
-    axs[2][1].xaxis.set_ticks(range(0, max_distance + 1, 1), minor=True)
-    axs[2][1].yaxis.set_major_formatter(formatter)
-
-    axs[1][3].axis('off')
-    axs[2][2].axis('off')
+    axs[1][4].axis('off')
     axs[2][3].axis('off')
+    axs[2][4].axis('off')
 
     fig.savefig(os.path.join(dirpath, 'stats'), bbox_inches='tight')
 

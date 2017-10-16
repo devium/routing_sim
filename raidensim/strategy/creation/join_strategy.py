@@ -196,18 +196,12 @@ class RaidenLatticeJoinStrategy(JoinStrategy):
     def __init__(
             self,
             position_strategy: LatticePositionStrategy,
-            num_shortcut_channels: IntRange,
             deposit: IntRange
     ):
         self.lattice = position_strategy.lattice
 
         def deposit_mapping(fullness: Fullness):
             return linear_int(*deposit, fullness)
-
-        def shortcut_mapping(fullness: Fullness):
-            return linear_int(*num_shortcut_channels, fullness)
-
-        self.shortcut_mapping = shortcut_mapping
         self.lattice_connection_strategy = LatticeConnectionStrategy(deposit_mapping)
 
     def join(self, raw: RawNetwork, node: Node):

@@ -1,5 +1,7 @@
 from typing import Tuple, Union
 
+import math
+
 from raidensim.network.node import Node
 from raidensim.network.raw_network import RawNetwork
 from raidensim.strategy.fee_strategy import FeeStrategy
@@ -40,7 +42,7 @@ class DistancePriorityStrategy(PriorityStrategy):
         return self.position_strategy.distance(v, target)
 
 
-class DistanceFeePriorityStrategy(PriorityStrategy):
+class NaiveFeePriorityStrategy(PriorityStrategy):
     """
     Prioritizes hops according to their distance to the target node and their channel net balance.
     A high net balance causes higher fees due to the added imbalance.
@@ -50,8 +52,43 @@ class DistanceFeePriorityStrategy(PriorityStrategy):
     def __init__(
             self,
             position_strategy: PositionStrategy,
+            fee_strategy: FeeStrategy
+    ):
+        self.position_strategy = position_strategy
+        self.fee_strategy = fee_strategy
+
+    def priority(
+            self,
+            raw: RawNetwork,
+            source: Node,
+            u: Node,
+            v: Node,
+            e: dict,
+            target: Node,
+            value: int
+    ):
+        current_distance = self.position_strategy.distance(u, target)
+        new_distance = self.position_strategy.distance(v, target)
+
+        if new_distance > current_distance:
+            distance_penalty = 1
+        else:
+            distance_penalty = 0
+
+        fee = self.fee_strategy.get_fee(u, v, e, value)
+        return distance_penalty, new_distance * fee
+
+
+class DistanceFeePriorityStrategy(PriorityStrategy):
+    """
+    Calculates the expected remaining fee for a transfer using the respective hop based on distance
+    and an assumed average fee per hop of 0.5.
+    """
+    def __init__(
+            self,
+            position_strategy: PositionStrategy,
             fee_strategy: FeeStrategy,
-            weights: Tuple[float, float]=(1,1)
+            weights: Tuple[float, float]
     ):
         self.position_strategy = position_strategy
         self.fee_strategy = fee_strategy
@@ -76,4 +113,4 @@ class DistanceFeePriorityStrategy(PriorityStrategy):
             distance_penalty = 0
 
         fee = self.fee_strategy.get_fee(u, v, e, value)
-        return distance_penalty, new_distance ** self.weights[0] * fee ** self.weights[1]
+        return distance_penalty, new_distance * self.weights[0] + fee * self.weights[1]

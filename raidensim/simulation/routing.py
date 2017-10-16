@@ -21,8 +21,6 @@ def simulate_routing(
         routing_strategies: List[Tuple[str, RoutingStrategy]],
         max_gif_frames=20
 ):
-    net.reset()
-
     # Prepare folder.
     dirpath = os.path.join(out_dir, 'routing_{}'.format(net.config.num_nodes))
     shutil.rmtree(dirpath, ignore_errors=True)

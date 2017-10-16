@@ -15,8 +15,8 @@ from raidensim.strategy.position_strategy import LatticePositionStrategy
 from raidensim.strategy.routing.next_hop.greedy_routing_strategy import GreedyRoutingStrategy
 from raidensim.strategy.routing.next_hop.priority_strategy import (
     DistancePriorityStrategy,
-    DistanceFeePriorityStrategy
-)
+    NaiveFeePriorityStrategy,
+    DistanceFeePriorityStrategy)
 from raidensim.simulation import simulate_routing, simulate_scaling
 
 from raidensim.strategy.creation.join_strategy import RaidenLatticeJoinStrategy
@@ -38,11 +38,7 @@ NETWORK_CONFIG_RAIDEN_NETWORK = NetworkConfiguration(
     max_id=MAX_ID,
     fullness_dist=BetaDistribution(0.5, 2),
     position_strategy=POSITION_STRATEGY,
-    join_strategy=RaidenLatticeJoinStrategy(
-        POSITION_STRATEGY,
-        num_shortcut_channels=(0, 0),
-        deposit=(10, 20)
-    )
+    join_strategy=RaidenLatticeJoinStrategy(POSITION_STRATEGY, deposit=(10, 20))
 )
 
 
@@ -54,9 +50,11 @@ def run():
     # fee_strategy = CapacityFeeStrategy()
 
     # Routing models.
-    distance_greedy_routing = GreedyRoutingStrategy(DistancePriorityStrategy(POSITION_STRATEGY))
-    distance_net_balance_greedy_routing = GreedyRoutingStrategy(
-        DistanceFeePriorityStrategy(POSITION_STRATEGY, fee_strategy, (1, 1))
+    distance_greedy_routing = GreedyRoutingStrategy(
+        DistancePriorityStrategy(config.position_strategy)
+    )
+    fee_greedy_routing = GreedyRoutingStrategy(
+        DistanceFeePriorityStrategy(config.position_strategy, fee_strategy, (1.0, 0.1))
     )
 
     now = datetime.datetime.now()
@@ -67,20 +65,10 @@ def run():
     net = Network(config)
 
     # Routing simulation + animation.
-    routing_strategies = [('greedy_distance', distance_greedy_routing)]
-
-    if True:
-        simulate_routing(
-            net,
-            dirpath,
-            num_sample_nodes=5,
-            num_paths=3,
-            transfer_value=1,
-            routing_strategies=routing_strategies,
-            max_gif_frames=30
-        )
-
-    routing_strategies.append(('greedy_fee_distance', distance_net_balance_greedy_routing))
+    routing_strategies = [
+        ('greedy_distance', distance_greedy_routing),
+        ('greedy_fee_distance', fee_greedy_routing)
+    ]
 
     # Network scaling simulation.
     if True:
@@ -88,14 +76,26 @@ def run():
             simulate_scaling(
                 net,
                 dirpath,
-                num_transfers=100000,
+                num_transfers=1000,
                 transfer_value=1,
+                position_strategy=config.position_strategy,
                 routing_strategy=routing_strategy,
                 fee_strategy=fee_strategy,
                 name=name,
                 max_recorded_failures=1,
                 execute_transfers=True
             )
+
+    if False:
+        simulate_routing(
+            net,
+            dirpath,
+            num_sample_nodes=5,
+            num_paths=5,
+            transfer_value=1,
+            routing_strategies=routing_strategies,
+            max_gif_frames=30
+        )
 
 
 if __name__ == '__main__':
