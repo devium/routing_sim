@@ -1,11 +1,11 @@
 import math
 import os
-import random
 import time
 from typing import List, Dict, Union
 
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
+import numpy as np
 
 from raidensim.network.network import Network
 from raidensim.network.node import Node
@@ -24,12 +24,13 @@ class NetworkStats:
         self.raw = raw
         self.num_nodes = len(raw.nodes)
         self.num_required_channels = net.config.join_strategy.num_required_channels
-        bi_edges = {frozenset({a, b}) for a, b in raw.edges}
-        self.capacities = [e['capacity'] for e in raw.edges.values()]
-        self.net_balances = [abs(raw[a][b]['net_balance']) for a, b in bi_edges]
-        self.imbalances = [abs(raw[a][b]['imbalance']) for a, b in bi_edges]
+        self.capacities = [e['capacity'] for u, v, e in raw.edges(data=True)]
+        self.net_balances = [abs(e['net_balance']) for u, v, e in raw.bi_edges]
+        self.imbalances = [abs(e['imbalance']) for u, v, e in raw.bi_edges]
         self.channel_counts = [len(raw[node]) for node in raw.nodes]
-        self.channel_distances = [net.config.position_strategy.distance(u, v) for u, v in bi_edges]
+        self.channel_distances = (
+            net.config.position_strategy.distance(u, v) for u, v, e in raw.bi_edges
+        )
         self.channel_distances = [distance for distance in self.channel_distances if distance > 1]
         self.num_channels_uni = len(raw.edges)
         self.num_depleted_channels = sum(1 for e in raw.edges.values() if e['capacity'] == 0)
@@ -216,7 +217,7 @@ def plot_stats(
 
     styling = {
         'align': 'left',
-        'edgecolor': 'black'
+        'edgecolor': 'k'
     }
 
     def add_labels(ax, labels: List[str], align='right'):
@@ -301,11 +302,11 @@ def plot_stats(
 
     ax = axs[0][4]
     ax.set_title('Channel distances > 1')
-    freq, _, _ = ax.hist(
-        pre_stats.channel_distances, bins=range(max_distance + 2), **styling
-    )
-    ax.xaxis.set_ticks(range(0, max_distance + 1, 10))
-    ax.xaxis.set_ticks(range(0, max_distance + 1, 1), minor=True)
+    log_distance = int(math.log2(max_distance)) + 1
+    bins = [2**(exp+0.5) for exp in range(log_distance + 1)]
+    ax.hist(pre_stats.channel_distances, bins=bins, edgecolor='k', rwidth=1)
+    ax.set_xscale('log', basex=2)
+    ax.xaxis.set_ticks([2 ** exp for exp in range(1, log_distance + 1)])
     ax.yaxis.set_major_formatter(formatter)
 
     ax = axs[1][3]

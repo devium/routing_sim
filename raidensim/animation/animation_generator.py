@@ -95,7 +95,8 @@ class AnimationGenerator(object):
         self.net = Network(self.config.network)
         self.node_to_index = {node: index for index, node in enumerate(self.net.raw.nodes)}
 
-        node_pos, self.channels = self.calc3d_positions()
+        node_pos = self.calc3d_positions()
+        self.channels = list(self.net.raw.bi_edges)
         self.channel_to_index = {frozenset(c): i for i, c in enumerate(self.channels)}
         channels_indexed = [
             (self.node_to_index[a], self.node_to_index[b]) for a, b in self.channels
@@ -140,8 +141,7 @@ class AnimationGenerator(object):
             y *= r
             positions.append([x, y, h])
 
-        bi_edges = {frozenset({a, b}) for a, b in self.net.raw.edges}
-        return positions, list(bi_edges)
+        return positions
 
     def reset_network(self):
         # Revert simulation back to an edgeless network. Build animations from there.

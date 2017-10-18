@@ -1,5 +1,5 @@
 import random
-from typing import Tuple, Callable
+from typing import Tuple, Callable, Iterator
 
 import networkx as nx
 import time
@@ -29,6 +29,10 @@ class RawNetwork(nx.DiGraph):
         nx.DiGraph.__init__(self)
         self.frozen_edges = []
 
+    @property
+    def bi_edges(self) -> Iterator[Tuple[Node, Node, dict]]:
+        return ((u, v, uv) for u, v, uv in self.edges(data=True) if u.uid < v.uid)
+
     def remove_isolated(self):
         connected_nodes = {node for edge in self.edges for node in edge}
         isolated_nodes = [node for node in self.nodes if node not in connected_nodes]
@@ -50,15 +54,14 @@ class RawNetwork(nx.DiGraph):
         self.remove_edge(self, other)
 
     def reset_channels(self):
-        bi_edges = {frozenset({u, v}) for u, v in self.edges}
+        num_bi_channels = len(self.edges) // 2
         tic = time.time()
-        for i, (u, v) in enumerate(bi_edges):
+        for i, (u, v, uv) in enumerate(self.bi_edges):
             toc = time.time()
             if toc - tic > 5:
                 tic = toc
-                print('Resetting channel {}/{}'.format(i, len(bi_edges)))
+                print('Resetting channel {}/{}'.format(i, num_bi_channels))
 
-            uv = self[u][v]
             vu = self[v][u]
             uv['balance'] = 0
             vu['balance'] = 0

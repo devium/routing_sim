@@ -10,13 +10,13 @@ from raidensim.network.network import Network
 from raidensim.network.config import NetworkConfiguration
 from raidensim.network.dist import BetaDistribution
 from raidensim.network.lattice import WovenLattice
-from raidensim.strategy.fee_strategy import SigmoidNetBalanceFeeStrategy, CapacityFeeStrategy
+from raidensim.strategy.fee_strategy import SigmoidNetBalanceFeeStrategy
 from raidensim.strategy.position_strategy import LatticePositionStrategy
 from raidensim.strategy.routing.next_hop.greedy_routing_strategy import GreedyRoutingStrategy
 from raidensim.strategy.routing.next_hop.priority_strategy import (
     DistancePriorityStrategy,
-    NaiveFeePriorityStrategy,
-    DistanceFeePriorityStrategy)
+    DistanceFeePriorityStrategy
+)
 from raidensim.simulation import simulate_routing, simulate_scaling
 
 from raidensim.strategy.creation.join_strategy import RaidenLatticeJoinStrategy
@@ -26,7 +26,7 @@ OUT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, '../out'))
 
 
 NUM_NODES = 10000
-NODE_FAILURE_RATE = 0.1
+NODE_FAILURE_RATE = 0.0
 
 MAX_ID = 2**32
 WEAVE_BASE_FACTOR = 2
@@ -48,7 +48,6 @@ def run():
     config = NETWORK_CONFIG_RAIDEN_NETWORK
 
     fee_strategy = SigmoidNetBalanceFeeStrategy()
-    # fee_strategy = CapacityFeeStrategy()
 
     # Routing models.
     distance_greedy_routing = GreedyRoutingStrategy(
@@ -73,12 +72,12 @@ def run():
     ]
 
     # Network scaling simulation.
-    if False:
+    if True:
         for name, routing_strategy in routing_strategies:
             simulate_scaling(
                 net,
                 dirpath,
-                num_transfers=10000,
+                num_transfers=1000,
                 transfer_value=1,
                 position_strategy=config.position_strategy,
                 routing_strategy=routing_strategy,

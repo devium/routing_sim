@@ -1,11 +1,10 @@
 import random
 import time
 from itertools import cycle
-from typing import List, Tuple, Callable, Iterable, Union
+from typing import List, Tuple, Callable, Union
 
 import imageio
 import matplotlib.pyplot as plt
-from matplotlib.patches import Wedge
 import networkx as nx
 import os
 import numpy as np
@@ -105,6 +104,7 @@ class Network(object):
             with_labels=False,
             ax=ax
         )
+
         nx.draw_networkx_edges(
             self.raw,
             pos,
@@ -113,6 +113,7 @@ class Network(object):
             arrows=False,
             ax=ax
         )
+
         if paths:
             edges = []
             for path in paths:
