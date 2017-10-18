@@ -1,7 +1,6 @@
 import random
 from typing import Callable
 
-from raidensim.network.lattice import Lattice
 from raidensim.network.node import Node
 from raidensim.network.raw_network import RawNetwork
 from raidensim.strategy.creation.filter_strategy import (
@@ -25,8 +24,8 @@ from .connection_strategy import (
 from .selection_strategy import (
     SelectionStrategy,
     KademliaSelectionStrategy,
-    RandomSelectionStrategy
-)
+    RandomSelectionStrategy,
+    RandomAuxLatticeSelectionStrategy)
 from raidensim.types import Fullness, IntRange
 
 
@@ -71,11 +70,7 @@ class DefaultJoinStrategy(JoinStrategy):
                 target = next(targets)
                 self.connection_strategy.connect(raw, node, target)
         except StopIteration:
-            print('Out of suitable nodes for {}. {}/{} connections unfulfilled'.format(
-                node,
-                max_initiated_channels - node['num_initiated_channels'],
-                max_initiated_channels
-            ))
+            pass
 
     @property
     def num_required_channels(self):
@@ -192,25 +187,51 @@ class MicroRaidenJoinStrategy(DefaultJoinStrategy):
         )
 
 
-class RaidenLatticeJoinStrategy(JoinStrategy):
+class RaidenLatticeJoinStrategy(DefaultJoinStrategy):
     def __init__(
             self,
             position_strategy: LatticePositionStrategy,
+            max_initiated_aux_channels: IntRange,
+            max_total_aux_channels: IntRange,
             deposit: IntRange
     ):
         self.lattice = position_strategy.lattice
 
+        def initiated_channels_mapping(fullness: Fullness):
+            return linear_int(*max_initiated_aux_channels, fullness)
+
+        def total_channels_mapping(fullness: Fullness):
+            return linear_int(*max_total_aux_channels, fullness)
+
         def deposit_mapping(fullness: Fullness):
             return linear_int(*deposit, fullness)
+
         self.lattice_connection_strategy = LatticeConnectionStrategy(deposit_mapping)
+
+        filter_strategies = [
+            TotalBidirectionalLimitsFilterStrategy(total_channels_mapping)
+        ]
+
+        selection_strategy = RandomAuxLatticeSelectionStrategy(self.lattice, filter_strategies)
+
+        DefaultJoinStrategy.__init__(
+            self,
+            initiated_channels_mapping=initiated_channels_mapping,
+            selection_strategy=selection_strategy,
+            connection_strategy=BidirectionalConnectionStrategy(deposit_mapping),
+            position_strategy=position_strategy
+        )
 
     def join(self, raw: RawNetwork, node: Node):
         coord = self.lattice.get_free_coord()
         self.lattice.add_node(node, coord)
+
         neighbors = list(self.lattice.coord_neighbors(coord))
         neighbors = [neighbor for neighbor in neighbors if (node, neighbor) not in raw.edges]
         for partner in neighbors:
             self.lattice_connection_strategy.connect(raw, node, partner)
+
+        DefaultJoinStrategy.join(self, raw, node)
 
     @property
     def num_required_channels(self):

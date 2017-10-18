@@ -73,9 +73,9 @@ class Lattice(object):
 
     def node_neighbors(self, node: Node) -> Iterator[Node]:
         node_pos = self.node_to_coord.get(node)
-        if not node_pos:
+        if node_pos is None:
             return iter(())
-        return self.coord_neighbors(*node_pos)
+        return self.coord_neighbors(node_pos)
 
     def coord_neighbors(self, coord: Coord) -> Iterator[Node]:
         return (
@@ -147,18 +147,13 @@ class WovenLattice(Lattice):
         self.min_order = min_order
         self.max_order = max_order
 
-    @property
-    def num_required_channels(self):
-        return super().num_required_channels + 2 * (self.max_order - self.min_order + 1)
+    def aux_node_neighbors(self, node: Node) -> Iterator[Node]:
+        node_pos = self.node_to_coord.get(node)
+        if node_pos is None:
+            return iter(())
+        return self.aux_coord_neighbors(node_pos)
 
-    def coord_neighbors(self, coord: Coord) -> Iterator[Node]:
-        lattice_neighbors = Lattice.coord_neighbors(self, coord)
-        try:
-            while True:
-                yield next(lattice_neighbors)
-        except StopIteration:
-            pass
-
+    def aux_coord_neighbors(self, coord: Coord) -> Iterator[Node]:
         # Additional long-range hops.
         hop_dim = sum(coord) % self.num_dims
         order_base = max(2, self.num_dims) * self.weave_base_factor

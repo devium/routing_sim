@@ -5,7 +5,6 @@ from typing import List, Dict, Union
 
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
-import numpy as np
 
 from raidensim.network.network import Network
 from raidensim.network.node import Node
@@ -158,8 +157,8 @@ def simulate_transfers(
             if execute_transfers:
                 raw.do_transfer(path, transfer_value)
 
-            stats.transfer_hops.append(len(path))
-            stats.avg_transfer_hops += len(path)
+            stats.transfer_hops.append(len(path) - 1)
+            stats.avg_transfer_hops += len(path) - 1
             stats.avg_contacted += len({node for subpath in path_history for node in subpath})
         else:
             print('No Path found from {} to {} that could sustain {} token(s).'.format(

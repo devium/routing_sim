@@ -6,6 +6,7 @@ from typing import Iterator, Callable, Union
 import math
 import numpy as np
 
+from raidensim.network.lattice import WovenLattice
 from raidensim.network.node import Node
 from raidensim.network.raw_network import RawNetwork
 from raidensim.strategy.position_strategy import PositionStrategy, LatticePositionStrategy
@@ -196,3 +197,14 @@ class RandomExclusionSelectionStrategy(ExclusionSelectionStrategy):
             if not self._check_exclusion(raw, i % len(self.nodes)) and \
                     self.match(raw, node, other):
                 yield other
+
+
+class RandomAuxLatticeSelectionStrategy(SelectionStrategy):
+    def __init__(self, lattice: WovenLattice, filter_strategies: Iterator[FilterStrategy]):
+        SelectionStrategy.__init__(self, filter_strategies)
+        self.lattice = lattice
+
+    def targets(self, raw: RawNetwork, node: Node) -> Iterator[Node]:
+        aux_neighbors = list(self.lattice.aux_node_neighbors(node))
+        random.shuffle(aux_neighbors)
+        return (target for target in aux_neighbors if self.match(raw, node, target))
