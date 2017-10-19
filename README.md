@@ -7,13 +7,13 @@ virtualenv env
 env/bin/pip install -e .
 ```
 
-## Run basic 2D simulation
+## 2D simulation
 
 ```
 env/bin/python bin/routing_sim.py
 ```
 
-## Create rendering using blender.
+## Create rendering using blender
 
 ### Create simulation data.
 1. Configure the constants in `bin/create_animation.py`.

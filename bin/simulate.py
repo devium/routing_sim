@@ -8,11 +8,11 @@ import math
 from raidensim.network.network import Network
 
 from raidensim.network.config import NetworkConfiguration
-from raidensim.network.dist import BetaDistribution
+from raidensim.network.dist import BetaDistribution, MicroRaidenDistribution
 from raidensim.network.lattice import WovenLattice
-from raidensim.strategy.creation.selection_strategy import RandomAuxLatticeSelectionStrategy
 from raidensim.strategy.fee_strategy import SigmoidNetBalanceFeeStrategy
-from raidensim.strategy.position_strategy import LatticePositionStrategy
+from raidensim.strategy.position_strategy import LatticePositionStrategy, RingPositionStrategy
+from raidensim.strategy.routing.global_routing_strategy import GlobalRoutingStrategy
 from raidensim.strategy.routing.next_hop.greedy_routing_strategy import GreedyRoutingStrategy
 from raidensim.strategy.routing.next_hop.priority_strategy import (
     DistancePriorityStrategy,
@@ -20,42 +20,72 @@ from raidensim.strategy.routing.next_hop.priority_strategy import (
 )
 from raidensim.simulation import simulate_routing, simulate_scaling
 
-from raidensim.strategy.creation.join_strategy import RaidenLatticeJoinStrategy
+from raidensim.strategy.creation.join_strategy import (
+    RaidenLatticeJoinStrategy,
+    RaidenKademliaJoinStrategy,
+    MicroRaidenJoinStrategy
+)
 
 SCRIPT_DIR = os.path.dirname(__file__)
 OUT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, '../out'))
 
 
-NUM_NODES = 100000
+NUM_NODES = 40000
 NODE_FAILURE_RATE = 0.0
 
 MAX_ID = 2**32
-WEAVE_BASE_FACTOR = 1
+WEAVE_BASE_FACTOR = 2
 MAX_CHANNEL_DISTANCE_ORDER = int(math.log(math.sqrt(NUM_NODES), 2 * WEAVE_BASE_FACTOR))
-LATTICE = WovenLattice(2, WEAVE_BASE_FACTOR, 2, max(1, MAX_CHANNEL_DISTANCE_ORDER))
-POSITION_STRATEGY = LatticePositionStrategy(LATTICE)
+LATTICE = WovenLattice(2, WEAVE_BASE_FACTOR, 1, max(1, MAX_CHANNEL_DISTANCE_ORDER))
 
-NETWORK_CONFIG_RAIDEN_NETWORK = NetworkConfiguration(
+LATTICE_NETWORK_CONFIG = NetworkConfiguration(
     num_nodes=NUM_NODES,
     max_id=MAX_ID,
     fullness_dist=BetaDistribution(0.5, 2),
-    position_strategy=POSITION_STRATEGY,
+    position_strategy=LatticePositionStrategy(LATTICE),
     join_strategy=RaidenLatticeJoinStrategy(
-        POSITION_STRATEGY,
-        max_initiated_aux_channels=(1, 3),
-        max_total_aux_channels=(3, 6),
+        lattice=LATTICE,
+        max_initiated_aux_channels=(2, 4),
+        max_total_aux_channels=(2, 8),
         deposit=(10, 20)
+    )
+)
+
+KADEMLIA_NETWORK_CONFIG = NetworkConfiguration(
+    num_nodes=NUM_NODES,
+    max_id=MAX_ID,
+    fullness_dist=BetaDistribution(0.5, 2),
+    position_strategy=RingPositionStrategy(MAX_ID),
+    join_strategy=RaidenKademliaJoinStrategy(
+        max_id=MAX_ID,
+        min_partner_deposit=0.2,
+        kademlia_bucket_limits=(25, 30),
+        max_initiated_channels=(1, 12),
+        max_accepted_channels=(5, 20),
+        deposit=(5, 40)
+    )
+)
+
+MICRORAIDEN_NETWORK_CONFIG = NetworkConfiguration(
+    num_nodes=NUM_NODES,
+    max_id=MAX_ID,
+    fullness_dist=MicroRaidenDistribution(0.9, BetaDistribution(0.5, 2)),
+    position_strategy=RingPositionStrategy(MAX_ID),
+    join_strategy=MicroRaidenJoinStrategy(
+        max_initiated_channels=(1,4),
+        deposit=10
     )
 )
 
 
 def run():
     # Network configuration.
-    config = NETWORK_CONFIG_RAIDEN_NETWORK
+    config = LATTICE_NETWORK_CONFIG
 
     fee_strategy = SigmoidNetBalanceFeeStrategy()
 
     # Routing models.
+    global_routing = GlobalRoutingStrategy(fee_strategy)
     distance_greedy_routing = GreedyRoutingStrategy(
         DistancePriorityStrategy(config.position_strategy)
     )
@@ -73,6 +103,7 @@ def run():
 
     # Routing simulation + animation.
     routing_strategies = [
+        # ('global', global_routing),
         ('greedy_distance', distance_greedy_routing),
         # ('greedy_fee_distance', fee_greedy_routing)
     ]
@@ -83,21 +114,21 @@ def run():
             simulate_scaling(
                 net,
                 dirpath,
-                num_transfers=2000,
+                num_transfers=10000,
                 transfer_value=1,
                 position_strategy=config.position_strategy,
                 routing_strategy=routing_strategy,
                 fee_strategy=fee_strategy,
                 name=name,
                 max_recorded_failures=1,
-                execute_transfers=False
+                credit_transfers=True
             )
 
-    if False:
+    if True:
         simulate_routing(
             net,
             dirpath,
-            num_sample_nodes=5,
+            num_sample_nodes=3,
             num_paths=3,
             transfer_value=1,
             routing_strategies=routing_strategies,

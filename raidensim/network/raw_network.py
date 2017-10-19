@@ -37,7 +37,7 @@ class RawNetwork(nx.DiGraph):
         connected_nodes = {node for edge in self.edges for node in edge}
         isolated_nodes = [node for node in self.nodes if node not in connected_nodes]
         if isolated_nodes:
-            print('Removing isolated nodes: {}'.format(isolated_nodes))
+            print('Removing {} isolated nodes: {}'.format(len(isolated_nodes), isolated_nodes))
             self.remove_nodes_from(isolated_nodes)
 
     def setup_channel(self, u: Node, v: Node, deposit: int) -> None:

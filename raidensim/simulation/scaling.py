@@ -15,23 +15,35 @@ from raidensim.strategy.routing.routing_strategy import RoutingStrategy
 from raidensim.types import Path
 
 
-class NetworkStats:
+class ConstantNetworkStats:
     def __init__(self, net: Network):
-        print('Collecting network stats.')
+        print('Collecting constant network stats.')
 
         raw = net.raw
-        self.raw = raw
-        self.num_nodes = len(raw.nodes)
+        self.num_nodes = raw.number_of_nodes()
         self.num_required_channels = net.config.join_strategy.num_required_channels
-        self.capacities = [e['capacity'] for u, v, e in raw.edges(data=True)]
-        self.net_balances = [abs(e['net_balance']) for u, v, e in raw.bi_edges]
-        self.imbalances = [abs(e['imbalance']) for u, v, e in raw.bi_edges]
-        self.channel_counts = [len(raw[node]) for node in raw.nodes]
+        self.channel_counts = [num_channels for node, num_channels in raw.out_degree]
+        self.max_channel_count = max(self.channel_counts)
+        self.avg_channel_count = sum(self.channel_counts) / len(self.channel_counts)
         self.channel_distances = (
             net.config.position_strategy.distance(u, v) for u, v, e in raw.bi_edges
         )
         self.channel_distances = [distance for distance in self.channel_distances if distance > 1]
-        self.num_channels_uni = len(raw.edges)
+        self.max_distance = max(self.channel_distances)
+
+
+class MutableNetworkStats:
+    def __init__(self, net: Network):
+        print('Collecting mutable network stats.')
+
+        raw = net.raw
+        self.capacities = [e['capacity'] for u, v, e in raw.edges(data=True)]
+        self.max_capacity = max(self.capacities)
+        self.net_balances = [abs(e['net_balance']) for u, v, e in raw.bi_edges]
+        self.max_net_balance = max(self.net_balances)
+        self.imbalances = [abs(e['imbalance']) for u, v, e in raw.bi_edges]
+        self.max_imbalance = max(self.imbalances)
+        self.num_channels_uni = raw.number_of_edges()
         self.num_depleted_channels = sum(1 for e in raw.edges.values() if e['capacity'] == 0)
         self.net_balance_stdev = math.sqrt(
             sum(x ** 2 for x in self.net_balances) / len(self.net_balances)
@@ -45,6 +57,7 @@ class SimulationStats:
     name = ''
     num_transfers = 0
     avg_transfer_hops = 0
+    max_transfer_hops = 0
     avg_contacted = 0
     avg_fee = 0
     avg_fee_per_distance = 0
@@ -67,7 +80,7 @@ def simulate_scaling(
         routing_strategy: RoutingStrategy,
         name: str,
         max_recorded_failures: int,
-        execute_transfers=True
+        credit_transfers=True
 ):
     """
     Simulates network transfers under the given fee model and plots some statistics.
@@ -75,7 +88,8 @@ def simulate_scaling(
     net.reset()
 
     # Baseline data.
-    pre_stats = NetworkStats(net)
+    stats = ConstantNetworkStats(net)
+    pre_stats = MutableNetworkStats(net)
 
     # Simulation.
     sim_stats = simulate_transfers(
@@ -85,13 +99,13 @@ def simulate_scaling(
         position_strategy,
         routing_strategy,
         fee_strategy,
-        execute_transfers,
+        credit_transfers,
         max_recorded_failures,
         name
     )
 
     # Post-simulation evaluation.
-    post_stats = NetworkStats(net)
+    post_stats = MutableNetworkStats(net)
 
     dirpath = os.path.join(out_dir, 'scaling_{}_{}_{}'.format(
         net.config.num_nodes, num_transfers, name
@@ -99,7 +113,7 @@ def simulate_scaling(
     os.makedirs(dirpath, exist_ok=True)
 
     # Plot stuff.
-    plot_stats(pre_stats, post_stats, sim_stats, dirpath)
+    plot_stats(stats, pre_stats, post_stats, sim_stats, dirpath)
 
     if net.config.num_nodes < 50000:
         print('Rendering network.')
@@ -117,16 +131,16 @@ def simulate_transfers(
         position_strategy: PositionStrategy,
         routing_strategy: RoutingStrategy,
         fee_strategy: FeeStrategy,
-        execute_transfers: bool,
+        credit_transfers: bool,
         max_recorded_failures: int,
         name: str
 ) -> SimulationStats:
     """
     Perform transfers between random nodes.
     """
-    num_channels_uni = len(raw.edges)
+    num_channels_uni = raw.number_of_edges()
     print('Simulating {} transfers between {} nodes over {} bidirectional channels.'.format(
-        num_transfers, len(raw.nodes), num_channels_uni // 2
+        num_transfers, raw.number_of_nodes(), num_channels_uni // 2
     ))
 
     def channel_filter(u: Node, v: Node, e: dict) -> bool:
@@ -154,7 +168,7 @@ def simulate_transfers(
             fee_per_distance = fee / distance
             stats.avg_fee_per_distance += fee_per_distance
             stats.fees_per_distance.append((distance, fee))
-            if execute_transfers:
+            if credit_transfers:
                 raw.do_transfer(path, transfer_value)
 
             stats.transfer_hops.append(len(path) - 1)
@@ -179,6 +193,7 @@ def simulate_transfers(
     stats.avg_fee /= num_success
     stats.avg_fee_per_distance /= num_success
     stats.avg_transfer_hops /= num_success
+    stats.max_transfer_hops = max(stats.transfer_hops)
     stats.avg_contacted /= num_success
     print('Finished after {} seconds. {} transfers failed.'.format(toc - tic, len(stats.failed)))
     return stats
@@ -191,24 +206,23 @@ def get_path_fee(
     for i in range(len(path) - 1):
         u = path[i]
         v = path[i + 1]
-        e = raw[u][v]
+        e = raw.get_edge_data(u, v)
         fee += fee_strategy.get_fee(u, v, e, transfer_value)
     return fee
 
 
 def plot_stats(
-        pre_stats: NetworkStats,
-        post_stats: NetworkStats,
+        stats: ConstantNetworkStats,
+        pre_stats: MutableNetworkStats,
+        post_stats: MutableNetworkStats,
         sim_stats: SimulationStats,
         dirpath: str
 ):
     print('Plotting stats.')
-    max_capacity = max(max(pre_stats.capacities), max(post_stats.capacities))
-    max_net_balance = max(max(pre_stats.net_balances), max(post_stats.net_balances))
-    max_imbalance = max(max(pre_stats.imbalances), max(post_stats.imbalances))
-    max_num_channels = max(pre_stats.channel_counts)
-    max_distance = max(pre_stats.channel_distances)
-    max_transfer_hops = max(sim_stats.transfer_hops)
+
+    max_capacity = max(pre_stats.max_capacity, post_stats.max_capacity)
+    max_net_balance = max(pre_stats.max_net_balance, post_stats.max_net_balance)
+    max_imbalance = max(pre_stats.max_imbalance, post_stats.max_imbalance)
 
     # Plots.
     fig, axs = plt.subplots(3, 5)
@@ -293,17 +307,18 @@ def plot_stats(
     ax = axs[0][3]
     ax.set_title('Channel count per node')
     ax.hist(
-        pre_stats.channel_counts, bins=range(max_num_channels + 2), **styling
+        stats.channel_counts, bins=range(stats.max_channel_count + 2), **styling
     )
-    ax.xaxis.set_ticks(range(0, max_num_channels + 1, 2))
-    ax.xaxis.set_ticks(range(0, max_num_channels + 1, 1), minor=True)
+    add_labels(ax, ['Mean: {:.2f}'.format(stats.avg_channel_count)])
+    ax.xaxis.set_ticks(range(0, stats.max_channel_count + 1, 2))
+    ax.xaxis.set_ticks(range(0, stats.max_channel_count + 1, 1), minor=True)
     ax.yaxis.set_major_formatter(formatter)
 
     ax = axs[0][4]
     ax.set_title('Channel distances > 1')
-    log_distance = int(math.log2(max_distance)) + 1
+    log_distance = int(math.log2(stats.max_distance)) + 1
     bins = [2**(exp+0.5) for exp in range(log_distance + 1)]
-    ax.hist(pre_stats.channel_distances, bins=bins, edgecolor='k', rwidth=1)
+    ax.hist(stats.channel_distances, bins=bins, edgecolor='k', rwidth=1)
     ax.set_xscale('log', basex=2)
     ax.xaxis.set_ticks([2 ** exp for exp in range(1, log_distance + 1)])
     ax.yaxis.set_major_formatter(formatter)
@@ -335,12 +350,14 @@ def plot_stats(
     ax = axs[2][2]
     ax.set_title('Hops per transfer')
     ax.hist(
-        sim_stats.transfer_hops, bins=range(max_transfer_hops + 2), range=[0, max_transfer_hops],
+        sim_stats.transfer_hops,
+        bins=range(sim_stats.max_transfer_hops + 2),
+        range=[0, sim_stats.max_transfer_hops],
         **styling
     )
     add_labels(ax, ['Mean: {:.2f}'.format(sim_stats.avg_transfer_hops)])
-    ax.xaxis.set_ticks(range(0, max_transfer_hops + 1, 5))
-    ax.xaxis.set_ticks(range(0, max_transfer_hops + 1, 1), minor=True)
+    ax.xaxis.set_ticks(range(0, sim_stats.max_transfer_hops + 1, 5))
+    ax.xaxis.set_ticks(range(0, sim_stats.max_transfer_hops + 1, 1), minor=True)
     ax.yaxis.set_major_formatter(formatter)
 
     # Stats plot (labels only).
@@ -348,9 +365,9 @@ def plot_stats(
     labels = [
         'Simulation name: {}'.format(sim_stats.name),
         '',
-        'Nodes: {}'.format(pre_stats.num_nodes),
+        'Nodes: {}'.format(stats.num_nodes),
         'Channels (unidirectional): {}'.format(pre_stats.num_channels_uni),
-        'Required channels/node: {}'.format(pre_stats.num_required_channels),
+        'Required channels/node: {}'.format(stats.num_required_channels),
         'Transfers: {}'.format(sim_stats.num_transfers),
         '',
         'Average nodes contacted: {:.2f}'.format(sim_stats.avg_contacted)

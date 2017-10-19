@@ -1,6 +1,7 @@
 import random
 from typing import Callable
 
+from raidensim.network.lattice import WovenLattice
 from raidensim.network.node import Node
 from raidensim.network.raw_network import RawNetwork
 from raidensim.strategy.creation.filter_strategy import (
@@ -11,11 +12,9 @@ from raidensim.strategy.creation.filter_strategy import (
     FullerFilterStrategy,
     AcceptedLimitsFilterStrategy,
     MinIncomingDepositFilterStrategy,
-    TotalLimitsFilterStrategy,
-    TotalBidirectionalLimitsFilterStrategy
-)
-from raidensim.strategy.position_strategy import PositionStrategy, RingPositionStrategy, \
-    LatticePositionStrategy
+    TotalBidirectionalLimitsFilterStrategy,
+    KademliaFilterStrategy)
+from raidensim.strategy.position_strategy import RingPositionStrategy
 from .connection_strategy import (
     ConnectionStrategy,
     BidirectionalConnectionStrategy,
@@ -23,9 +22,9 @@ from .connection_strategy import (
 )
 from .selection_strategy import (
     SelectionStrategy,
-    KademliaSelectionStrategy,
-    RandomSelectionStrategy,
-    RandomAuxLatticeSelectionStrategy)
+    FirstMatchSelectionStrategy,
+    RandomAuxLatticeSelectionStrategy,
+    RandomSelectionStrategy)
 from raidensim.types import Fullness, IntRange
 
 
@@ -38,6 +37,11 @@ def linear_float(min_: float, max_: float, fullness: float) -> float:
 
 
 class JoinStrategy(object):
+    """
+    Strategy pattern to define how a new node should join an existing network, i.e., target
+    selection, preconditions, and connection type.
+    """
+
     def join(self, raw: RawNetwork, node: Node):
         raise NotImplementedError
 
@@ -47,17 +51,19 @@ class JoinStrategy(object):
 
 
 class DefaultJoinStrategy(JoinStrategy):
+    """
+    Joins nodes by attempting to initiate a number of channels relative to their fullness.
+    Targets and connection type are determined by external strategies.
+    """
     def __init__(
             self,
             initiated_channels_mapping: Callable[[Fullness], int],
             selection_strategy: SelectionStrategy,
-            connection_strategy: ConnectionStrategy,
-            position_strategy: PositionStrategy
+            connection_strategy: ConnectionStrategy
     ):
         self.initiated_channels_mapping = initiated_channels_mapping
         self.selection_strategy = selection_strategy
         self.connection_strategy = connection_strategy
-        self.position_strategy = position_strategy
 
     def join(self, raw: RawNetwork, node: Node):
         max_initiated_channels = self.initiated_channels_mapping(node.fullness)
@@ -78,9 +84,12 @@ class DefaultJoinStrategy(JoinStrategy):
 
 
 class SimpleJoinStrategy(DefaultJoinStrategy):
+    """
+    Randomly and bidirectionally connects nodes using a linear mapping from fullness to the number
+    of initiated channels per node and the size of its deposit.
+    """
     def __init__(
             self,
-            max_id: int,
             max_initiated_channels: IntRange,
             deposit: IntRange
     ):
@@ -98,20 +107,20 @@ class SimpleJoinStrategy(DefaultJoinStrategy):
         DefaultJoinStrategy.__init__(
             self,
             initiated_channels_mapping=initiated_channels_mapping,
-            selection_strategy=RandomSelectionStrategy(filter_strategies=filter_strategies),
-            connection_strategy=BidirectionalConnectionStrategy(deposit_mapping),
-            position_strategy=RingPositionStrategy(max_id)
+            selection_strategy=FirstMatchSelectionStrategy(filter_strategies=filter_strategies),
+            connection_strategy=BidirectionalConnectionStrategy(deposit_mapping)
         )
 
 
-class RaidenRingJoinStrategy(DefaultJoinStrategy):
+class RaidenKademliaJoinStrategy(DefaultJoinStrategy):
+    """
+    Builds a Kademlia-like network over nodes positioned by their ID on a ring.
+    """
     def __init__(
             self,
             max_id: int,
             min_partner_deposit: float,
-            position_strategy: PositionStrategy,
-            max_distance: int,
-            kademlia_skip: int,
+            kademlia_bucket_limits: IntRange,
             max_initiated_channels: IntRange,
             max_accepted_channels: IntRange,
             deposit: IntRange
@@ -125,40 +134,34 @@ class RaidenRingJoinStrategy(DefaultJoinStrategy):
         def deposit_mapping(fullness: Fullness):
             return linear_int(*deposit, fullness)
 
+        position_strategy = RingPositionStrategy(max_id)
+
         filter_strategies = [
             IdentityFilterStrategy(),
             NotConnectedFilterStrategy(),
-            DistanceFilterStrategy(position_strategy, max_distance),
+            KademliaFilterStrategy(position_strategy, kademlia_bucket_limits),
             FullerFilterStrategy(),
             AcceptedLimitsFilterStrategy(accepted_channels_mapping),
             MinIncomingDepositFilterStrategy(deposit_mapping, min_partner_deposit)
         ]
 
-        selection_strategy = KademliaSelectionStrategy(
-            max_id=max_id,
-            max_distance=max_distance,
-            skip=kademlia_skip,
-            filter_strategies=filter_strategies
-        )
-
-        # selection_strategy = RandomSelectionStrategy(filter_strategies=filter_strategies)
+        selection_strategy = FirstMatchSelectionStrategy(filter_strategies=filter_strategies)
 
         DefaultJoinStrategy.__init__(
             self,
             initiated_channels_mapping=initiated_channels_mapping,
             selection_strategy=selection_strategy,
-            connection_strategy=BidirectionalConnectionStrategy(deposit_mapping),
-            position_strategy=position_strategy
+            connection_strategy=BidirectionalConnectionStrategy(deposit_mapping)
         )
 
 
 class MicroRaidenJoinStrategy(DefaultJoinStrategy):
-    def __init__(
-            self,
-            max_id: int,
-            max_initiated_channels: IntRange,
-            deposit: int
-    ):
+    """
+    Joins nodes using unidirectional channels positioned on a ring. All channels have equal
+    deposits and only client nodes (fullness == 0) initiate random amounts of channels.
+    """
+
+    def __init__(self, max_initiated_channels: IntRange, deposit: int):
         def initiated_channels_mapping(fullness: Fullness):
             if fullness == 0:
                 return random.randint(*max_initiated_channels)
@@ -174,28 +177,30 @@ class MicroRaidenJoinStrategy(DefaultJoinStrategy):
             MicroRaidenServerFilterStrategy()
         ]
 
-        selection_strategy = RandomSelectionStrategy(
-            filter_strategies=filter_strategies
-        )
+        selection_strategy = RandomSelectionStrategy(filter_strategies=filter_strategies)
 
         DefaultJoinStrategy.__init__(
             self,
             initiated_channels_mapping=initiated_channels_mapping,
             selection_strategy=selection_strategy,
-            connection_strategy=BidirectionalConnectionStrategy(deposit_mapping),
-            position_strategy=RingPositionStrategy(max_id)
+            connection_strategy=BidirectionalConnectionStrategy(deposit_mapping)
         )
 
 
 class RaidenLatticeJoinStrategy(DefaultJoinStrategy):
+    """
+    Joins nodes in a regular lattice, independent of their UID. Lattice channels are mandatory but
+    auxiliary long-distance channels are dependent on the node's fullness.
+    """
+
     def __init__(
             self,
-            position_strategy: LatticePositionStrategy,
+            lattice: WovenLattice,
             max_initiated_aux_channels: IntRange,
             max_total_aux_channels: IntRange,
             deposit: IntRange
     ):
-        self.lattice = position_strategy.lattice
+        self.lattice = lattice
 
         def initiated_channels_mapping(fullness: Fullness):
             return linear_int(*max_initiated_aux_channels, fullness)
@@ -218,8 +223,7 @@ class RaidenLatticeJoinStrategy(DefaultJoinStrategy):
             self,
             initiated_channels_mapping=initiated_channels_mapping,
             selection_strategy=selection_strategy,
-            connection_strategy=BidirectionalConnectionStrategy(deposit_mapping),
-            position_strategy=position_strategy
+            connection_strategy=BidirectionalConnectionStrategy(deposit_mapping)
         )
 
     def join(self, raw: RawNetwork, node: Node):

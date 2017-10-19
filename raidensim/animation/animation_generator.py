@@ -96,7 +96,7 @@ class AnimationGenerator(object):
         self.node_to_index = {node: index for index, node in enumerate(self.net.raw.nodes)}
 
         node_pos = self.calc3d_positions()
-        self.channels = list(self.net.raw.bi_edges)
+        self.channels = list(frozenset({u, v}) for u, v, e in self.net.raw.bi_edges)
         self.channel_to_index = {frozenset(c): i for i, c in enumerate(self.channels)}
         channels_indexed = [
             (self.node_to_index[a], self.node_to_index[b]) for a, b in self.channels

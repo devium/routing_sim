@@ -8,6 +8,11 @@ class FeeStrategy(object):
         raise NotImplementedError
 
 
+class ConstantFeeStrategy(FeeStrategy):
+    def get_fee(self, u: Node, v: Node, e: dict, value: int) -> float:
+        return 1
+
+
 class SigmoidNetBalanceFeeStrategy(FeeStrategy):
     @staticmethod
     def sigmoid(value: float):

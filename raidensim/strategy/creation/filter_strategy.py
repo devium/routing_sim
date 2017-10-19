@@ -6,10 +6,14 @@ import math
 from raidensim.network.node import Node
 from raidensim.network.raw_network import RawNetwork
 from raidensim.strategy.position_strategy import PositionStrategy
-from raidensim.types import Fullness
+from raidensim.types import Fullness, IntRange
 
 
 class FilterStrategy(object):
+    """
+    Strategy pattern used to reject/filter connections between certain nodes.
+    """
+
     def filter(self, raw: RawNetwork, a: Node, b: Node) -> bool:
         raise NotImplementedError
 
@@ -29,7 +33,7 @@ class NotConnectedFilterStrategy(FilterStrategy):
     """
 
     def filter(self, raw: RawNetwork, a: Node, b: Node):
-        return b not in raw[a]
+        return not raw.has_edge(a, b)
 
 
 class DistanceFilterStrategy(FilterStrategy):
@@ -57,7 +61,7 @@ class FullerFilterStrategy(FilterStrategy):
 class MinIncomingDepositFilterStrategy(FilterStrategy):
     """
     Disallows connections where the initiating node's deposit is below the accepting node's
-    threshold.
+    threshold. This threshold is a fixed fraction of the accepting node's own deposit.
     """
 
     def __init__(self, deposit_mapping: Callable[[Fullness], float], min_incoming_deposit: float):
@@ -72,8 +76,8 @@ class MinIncomingDepositFilterStrategy(FilterStrategy):
 
 class MinMutualDepositFilterStrategy(FilterStrategy):
     """
-    Disallows connections where the initiating node's deposit is below the accepting node's
-    threshold.
+    Disallows connections where either of the nodes' deposits is below the other node's threshold.
+    This threshold is a fixed fraction of the other node's own deposit.
     """
 
     def __init__(self, deposit_mapping: Callable[[Fullness], float], min_deposit: float):
@@ -118,7 +122,7 @@ class AcceptedLimitsFilterStrategy(FilterStrategy):
 class TotalLimitsFilterStrategy(FilterStrategy):
     """
     Only allows a total number of incoming and outgoing channels for a node, regardless of
-    initiator.
+    initiator. Each direction counts as a single channel.
     """
 
     def __init__(self, max_total_channels_mapping: Callable[[Fullness], int]):
@@ -133,7 +137,9 @@ class TotalLimitsFilterStrategy(FilterStrategy):
 
 class TotalBidirectionalLimitsFilterStrategy(TotalLimitsFilterStrategy):
     """
-    Only allows a total number of bidirectional channels for a node, regardless of initiator.
+    Only allows a total number of bidirectional channels for a node, regardless of initiator. This
+    is the same as a unidirectional total limit filter, except that one bidirectional channel
+    counts as both an incoming and and outgoing channel.
     """
     def __init__(self, max_total_channels_mapping: Callable[[Fullness], int]):
         TotalLimitsFilterStrategy.__init__(
@@ -170,46 +176,38 @@ class ThresholdFilterStrategy(FilterStrategy):
 
 class KademliaFilterStrategy(FilterStrategy):
     """
-    Attempts to translate the KademliaSelectionStrategy into a filter, so a random selection
-    strategy with a Kademlia filter results in approximately the same network as a Kademlia
+    Attempts to translate the Kademlia network layout into a filter that can be used in a random
     selection strategy.
+
+    Partner nodes are sorted into buckets of exponential distance. Bucket i holds all nodes
+    from distance 2**(i-1) to distance 2**i inclusive.
+
+    Buckets can be limited. The lower limit merges all buckets up to that bucket index into a
+    single bucket. This prevents buckets of too small a size that are highly unlikely of ever being
+    filled. The upper limit skips buckets above a certain index.
+
+    Example: limits (3, 7) will sort nodes in the following buckets:
+    (0, 16), [16, 32), [32, 64), [64, 128)
+
+    When connecting to a new node, this new node must fall into the first emptiest bucket.
     """
 
-    def __init__(
-            self, position_strategy: PositionStrategy, max_distance: int, skip: int, tolerance: int
-    ):
+    def __init__(self, position_strategy: PositionStrategy, bucket_limits: IntRange):
         self.position_strategy = position_strategy
-        targets_per_cycle = int(math.log(max_distance, 2)) + 1
-        distances = [int(2 ** i) for i in range(skip, targets_per_cycle)]
-        self.buckets = [(max(0, d - tolerance), d + tolerance) for d in distances]
+        self.num_buckets_merged = bucket_limits[0]
+        self.num_buckets = bucket_limits[1] - bucket_limits[0]
+
+    def _get_bucket(self, a: Node, b: Node) -> int:
+        distance = self.position_strategy.distance(a, b)
+        return max(0, int(math.log2(distance)) - self.num_buckets_merged)
 
     def filter(self, raw: RawNetwork, a: Node, b: Node):
-        """
-        Preserve the following properties:
-        - Kademlia produces target IDs at exponentially increasing distances.
-        - Nodes have to be within a certain tolerance of these distances, aka bucket.
-        - Insertion order into the buckets follows distance, cycling.
-        - Valid example buckets: [2,1,1,1], [1,1,1,0]
-        - Invalid example buckets: [0,0,1,0], although this might happen if nodes go offline.
-        - Leaky buckets (as invalid example above) have to be refilled from closest to furthest.
-        => New nodes have to be in the left-most bucket with minimum amount of nodes.
-        """
-        # Cycle through buckets and assign partners to them. The first bucket running out of valid
-        # partners will be the new target bucket.
-        partner_distances = sorted(
-            (self.position_strategy.distance(a, partner), i) for i, partner in enumerate(raw[a])
-        )
-        bucket = None
-        try:
-            for bucket in cycle(self.buckets):
-                i = next(
-                    i for i, (distance, _) in enumerate(partner_distances)
-                    if bucket[0] <= distance < bucket[1]
-                )
-                del partner_distances[i]
-        except StopIteration:
-            pass
-        return bucket[0] <= self.position_strategy.distance(a, b) < bucket[1]
+        buckets = [0] * self.num_buckets
+        target_bucket = self._get_bucket(a, b)
+        for partner in raw.neighbors(a):
+            buckets[self._get_bucket(a, partner)] += 1
+        _, first_emptiest_bucket = min((buckets[i], i) for i in range(self.num_buckets))
+        return target_bucket == first_emptiest_bucket
 
 
 class MicroRaidenServerFilterStrategy(FilterStrategy):

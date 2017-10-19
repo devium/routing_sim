@@ -6,11 +6,21 @@ from raidensim.types import Fullness
 
 
 class ConnectionStrategy(object):
+    """
+    Strategy pattern defining how a node A should connect to node B once all preconditions are met.
+    """
+
     def connect(self, raw: RawNetwork, a: Node, b: Node):
         raise NotImplementedError
 
 
 class BidirectionalConnectionStrategy(ConnectionStrategy):
+    """
+    Creates a bidirectional channel using two DiGraph edges and tracks information about the number
+    of initiated, incoming (unidirectional), outgoing (unidirectional), and accepted channels for
+    both nodes.
+    """
+
     def __init__(self, deposit_mapping: Callable[[Fullness], int]):
         self.deposit_mapping = deposit_mapping
 
@@ -26,6 +36,10 @@ class BidirectionalConnectionStrategy(ConnectionStrategy):
 
 
 class LatticeConnectionStrategy(ConnectionStrategy):
+    """
+    Creates channels without adding to the channel limits.
+    """
+
     def __init__(self, deposit_mapping: Callable[[Fullness], int]):
         self.deposit_mapping = deposit_mapping
 
