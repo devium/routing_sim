@@ -197,7 +197,7 @@ class RaidenLatticeJoinStrategy(DefaultJoinStrategy):
             self,
             lattice: WovenLattice,
             max_initiated_aux_channels: IntRange,
-            max_total_aux_channels: IntRange,
+            max_accepted_aux_channels: IntRange,
             deposit: IntRange
     ):
         self.lattice = lattice
@@ -205,8 +205,8 @@ class RaidenLatticeJoinStrategy(DefaultJoinStrategy):
         def initiated_channels_mapping(fullness: Fullness):
             return linear_int(*max_initiated_aux_channels, fullness)
 
-        def total_channels_mapping(fullness: Fullness):
-            return linear_int(*max_total_aux_channels, fullness)
+        def accepted_channels_mapping(fullness: Fullness):
+            return linear_int(*max_accepted_aux_channels, fullness)
 
         def deposit_mapping(fullness: Fullness):
             return linear_int(*deposit, fullness)
@@ -214,7 +214,7 @@ class RaidenLatticeJoinStrategy(DefaultJoinStrategy):
         self.lattice_connection_strategy = LatticeConnectionStrategy(deposit_mapping)
 
         filter_strategies = [
-            TotalBidirectionalLimitsFilterStrategy(total_channels_mapping)
+            AcceptedLimitsFilterStrategy(accepted_channels_mapping)
         ]
 
         selection_strategy = RandomAuxLatticeSelectionStrategy(self.lattice, filter_strategies)

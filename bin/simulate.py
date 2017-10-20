@@ -30,7 +30,7 @@ SCRIPT_DIR = os.path.dirname(__file__)
 OUT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, '../out'))
 
 
-NUM_NODES = 40000
+NUM_NODES = 10000
 NODE_FAILURE_RATE = 0.0
 
 MAX_ID = 2**32
@@ -46,7 +46,7 @@ LATTICE_NETWORK_CONFIG = NetworkConfiguration(
     join_strategy=RaidenLatticeJoinStrategy(
         lattice=LATTICE,
         max_initiated_aux_channels=(2, 4),
-        max_total_aux_channels=(2, 8),
+        max_accepted_aux_channels=(2, 4),
         deposit=(10, 20)
     )
 )
@@ -124,7 +124,7 @@ def run():
                 credit_transfers=True
             )
 
-    if True:
+    if False:
         simulate_routing(
             net,
             dirpath,

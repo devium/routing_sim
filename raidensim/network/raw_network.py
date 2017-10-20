@@ -71,6 +71,7 @@ class RawNetwork(nx.DiGraph):
         """
         Freeze all incoming edges of a set of random nodes.
         """
+        print('Freezing {} nodes.'.format(num_nodes))
         self.unfreeze_nodes()
         freeze_nodes = random.sample(self.nodes, num_nodes)
         self.frozen_edges += [
