@@ -10,7 +10,7 @@ from raidensim.network.network import Network
 from raidensim.network.node import Node
 from raidensim.network.raw_network import RawNetwork
 from raidensim.strategy.fee_strategy import FeeStrategy
-from raidensim.strategy.position_strategy import PositionStrategy
+from raidensim.strategy.position_strategy import PositionStrategy, LatticePositionStrategy
 from raidensim.strategy.routing.routing_strategy import RoutingStrategy
 from raidensim.types import Path
 
@@ -143,8 +143,12 @@ def simulate_transfers(
         num_transfers, raw.number_of_nodes(), num_channels_uni // 2
     ))
 
-    def channel_filter(u: Node, v: Node, e: dict) -> bool:
-        return position_strategy.distance(u, v) == 1
+    if isinstance(position_strategy, LatticePositionStrategy):
+        def channel_filter(u: Node, v: Node, e: dict) -> bool:
+            return position_strategy.distance(u, v) == 1
+    else:
+        def channel_filter(u: Node, v: Node, e: dict) -> bool:
+            return True
 
     stats = SimulationStats()
     tic = time.time()

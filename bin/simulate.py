@@ -5,13 +5,15 @@ import random
 
 import math
 
+from raidensim.network.hyperbolic_disk import HyperbolicDisk
 from raidensim.network.network import Network
 
 from raidensim.network.config import NetworkConfiguration
 from raidensim.network.dist import BetaDistribution, MicroRaidenDistribution
 from raidensim.network.lattice import WovenLattice
 from raidensim.strategy.fee_strategy import SigmoidNetBalanceFeeStrategy
-from raidensim.strategy.position_strategy import LatticePositionStrategy, RingPositionStrategy
+from raidensim.strategy.position_strategy import LatticePositionStrategy, RingPositionStrategy, \
+    HyperbolicPositionStrategy
 from raidensim.strategy.routing.global_routing_strategy import GlobalRoutingStrategy
 from raidensim.strategy.routing.next_hop.greedy_routing_strategy import GreedyRoutingStrategy
 from raidensim.strategy.routing.next_hop.priority_strategy import (
@@ -23,20 +25,29 @@ from raidensim.simulation import simulate_routing, simulate_scaling
 from raidensim.strategy.creation.join_strategy import (
     RaidenLatticeJoinStrategy,
     RaidenKademliaJoinStrategy,
-    MicroRaidenJoinStrategy
-)
+    MicroRaidenJoinStrategy,
+    RaidenHyperbolicJoinStrategy)
 
 SCRIPT_DIR = os.path.dirname(__file__)
 OUT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, '../out'))
 
 
-NUM_NODES = 10000
+NUM_NODES = 255
 NODE_FAILURE_RATE = 0.0
 
 MAX_ID = 2**32
 WEAVE_BASE_FACTOR = 2
-MAX_CHANNEL_DISTANCE_ORDER = int(math.log(math.sqrt(NUM_NODES), 2 * WEAVE_BASE_FACTOR))
-LATTICE = WovenLattice(2, WEAVE_BASE_FACTOR, 1, max(1, MAX_CHANNEL_DISTANCE_ORDER))
+MAX_CHANNEL_DISTANCE_ORDER = int(math.log(NUM_NODES, 2 * WEAVE_BASE_FACTOR))
+LATTICE = WovenLattice(1, WEAVE_BASE_FACTOR, 1, max(1, MAX_CHANNEL_DISTANCE_ORDER))
+DISK = HyperbolicDisk(7, 32)
+
+HYPERBOLIC_NETWORK_CONFIG = NetworkConfiguration(
+    num_nodes=NUM_NODES,
+    max_id=MAX_ID,
+    fullness_dist=BetaDistribution(0.5, 2),
+    position_strategy=HyperbolicPositionStrategy(DISK),
+    join_strategy=RaidenHyperbolicJoinStrategy(DISK)
+)
 
 LATTICE_NETWORK_CONFIG = NetworkConfiguration(
     num_nodes=NUM_NODES,
@@ -45,8 +56,8 @@ LATTICE_NETWORK_CONFIG = NetworkConfiguration(
     position_strategy=LatticePositionStrategy(LATTICE),
     join_strategy=RaidenLatticeJoinStrategy(
         lattice=LATTICE,
-        max_initiated_aux_channels=(2, 4),
-        max_accepted_aux_channels=(2, 4),
+        max_initiated_aux_channels=(8, 12),
+        max_accepted_aux_channels=(8, 12),
         deposit=(10, 20)
     )
 )
@@ -80,7 +91,7 @@ MICRORAIDEN_NETWORK_CONFIG = NetworkConfiguration(
 
 def run():
     # Network configuration.
-    config = LATTICE_NETWORK_CONFIG
+    config = HYPERBOLIC_NETWORK_CONFIG
 
     fee_strategy = SigmoidNetBalanceFeeStrategy()
 
@@ -109,12 +120,12 @@ def run():
     ]
 
     # Network scaling simulation.
-    if True:
+    if False:
         for name, routing_strategy in routing_strategies:
             simulate_scaling(
                 net,
                 dirpath,
-                num_transfers=10000,
+                num_transfers=5,
                 transfer_value=1,
                 position_strategy=config.position_strategy,
                 routing_strategy=routing_strategy,
@@ -124,12 +135,12 @@ def run():
                 credit_transfers=True
             )
 
-    if False:
+    if True:
         simulate_routing(
             net,
             dirpath,
-            num_sample_nodes=3,
-            num_paths=3,
+            num_sample_nodes=5,
+            num_paths=4,
             transfer_value=1,
             routing_strategies=routing_strategies,
             max_gif_frames=30

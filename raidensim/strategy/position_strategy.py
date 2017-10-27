@@ -3,6 +3,8 @@ from typing import Union, Iterable, Tuple
 import math
 
 import numpy as np
+
+from raidensim.network.hyperbolic_disk import HyperbolicDisk
 from raidensim.network.lattice import Lattice
 from raidensim.network.node import Node
 from raidensim.types import FloatRange
@@ -44,7 +46,7 @@ class RingPositionStrategy(PositionStrategy):
         r = 2 / ((node.fullness - self.min_fullness) / self.range + 1)
         return x * r, y * r
 
-    def distance(self, a: Node, b: Node):
+    def distance(self, a: Node, b: Node) -> int:
         return min((a.uid - b.uid) % self.max_id, (b.uid - a.uid) % self.max_id)
 
     @property
@@ -59,7 +61,7 @@ class LatticePositionStrategy(PositionStrategy):
     def _map_node(self, node: Node) -> np.array:
         return self.lattice.node_to_coord[node]
 
-    def distance(self, a: Node, b: Node):
+    def distance(self, a: Node, b: Node) -> int:
         return self.lattice.node_distance(a, b)
 
     @property
@@ -69,3 +71,21 @@ class LatticePositionStrategy(PositionStrategy):
             return (min_[0] - 1, max_[0] + 1), (-0.5, 0.5)
         else:
             return (min_[0] - 1, max_[0] + 1), (min_[1] - 1, max_[1] + 1)
+
+
+class HyperbolicPositionStrategy(PositionStrategy):
+    def __init__(self, disk: HyperbolicDisk):
+        self.disk = disk
+
+    def _map_node(self, node: Node) -> np.array:
+        coord = self.disk.node_to_coord[node]
+        r, theta = self.disk.coord_to_polar(coord)
+        r /= self.disk.radius
+        return np.array([math.cos(theta) * r, math.sin(theta) * r])
+
+    def distance(self, a: Node, b: Node) -> float:
+        return self.disk.node_distance(a, b)
+
+    @property
+    def plot_limits(self) -> Tuple[FloatRange, FloatRange]:
+        return (-1.1, 1.1), (-1.1, 1.1)

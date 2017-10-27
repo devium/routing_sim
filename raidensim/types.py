@@ -9,3 +9,5 @@ IntRange = Tuple[int, int]
 FloatRange = Tuple[float, float]
 Path = List[Node]
 Coord = array
+DiskCoord = array
+PolarCoord = array
