@@ -11,6 +11,7 @@ from raidensim.network.network import Network
 from raidensim.network.config import NetworkConfiguration
 from raidensim.network.dist import BetaDistribution, MicroRaidenDistribution
 from raidensim.network.lattice import WovenLattice
+from raidensim.network.node import Node
 from raidensim.strategy.fee_strategy import SigmoidNetBalanceFeeStrategy
 from raidensim.strategy.position_strategy import LatticePositionStrategy, RingPositionStrategy, \
     HyperbolicPositionStrategy
@@ -32,14 +33,14 @@ SCRIPT_DIR = os.path.dirname(__file__)
 OUT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, '../out'))
 
 
-NUM_NODES = 255
+NUM_NODES = 511
 NODE_FAILURE_RATE = 0.0
 
 MAX_ID = 2**32
 WEAVE_BASE_FACTOR = 2
 MAX_CHANNEL_DISTANCE_ORDER = int(math.log(NUM_NODES, 2 * WEAVE_BASE_FACTOR))
 LATTICE = WovenLattice(1, WEAVE_BASE_FACTOR, 1, max(1, MAX_CHANNEL_DISTANCE_ORDER))
-DISK = HyperbolicDisk(7, 32)
+DISK = HyperbolicDisk((0, 8), 18)
 
 HYPERBOLIC_NETWORK_CONFIG = NetworkConfiguration(
     num_nodes=NUM_NODES,
@@ -125,22 +126,22 @@ def run():
             simulate_scaling(
                 net,
                 dirpath,
-                num_transfers=5,
+                num_transfers=1000,
                 transfer_value=1,
                 position_strategy=config.position_strategy,
                 routing_strategy=routing_strategy,
                 fee_strategy=fee_strategy,
                 name=name,
                 max_recorded_failures=1,
-                credit_transfers=True
+                credit_transfers=False
             )
 
     if True:
         simulate_routing(
             net,
             dirpath,
-            num_sample_nodes=5,
-            num_paths=4,
+            num_sample_nodes=20,
+            num_paths=5,
             transfer_value=1,
             routing_strategies=routing_strategies,
             max_gif_frames=30

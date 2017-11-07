@@ -48,7 +48,10 @@ def plot_network(net: Network, dirpath: str):
     print('Plotting network.')
     net.draw(filepath=os.path.join(dirpath, 'network'))
     if net.raw.number_of_nodes() < 1000:
-        net.draw(draw_labels=True, filepath=os.path.join(dirpath, 'network_labels'))
+        net.draw(
+            labeling_strategy=net.config.position_strategy.label,
+            filepath=os.path.join(dirpath, 'network_labels')
+        )
 
 
 def plot_sample_nodes(net: Network, num_nodes: int, dirpath: str):
@@ -90,7 +93,11 @@ def plot_sample_routes(
         os.makedirs(dirpath, exist_ok=True)
 
         source, target = net.raw.get_available_nodes(transfer_value, end_node_channel_filter)
-        net.draw(highlighted_nodes=[[], [source, target]], filepath=os.path.join(dirpath, 'nodes'))
+        net.draw(
+            channels=[],
+            highlighted_nodes=[[], [source, target]],
+            filepath=os.path.join(dirpath, 'nodes')
+        )
 
         for ir, routing_strategy in enumerate(routing_strategies):
             print(routing_strategy[0])
@@ -102,6 +109,7 @@ def plot_sample_routes(
                 print('Found path of length {}: {}'.format(len(path), path))
                 filename = 'path.png'
                 net.draw(
+                    channels=[],
                     paths=[path],
                     highlighted_nodes=[path, [source, target]],
                     filepath=os.path.join(dirpath, filename)

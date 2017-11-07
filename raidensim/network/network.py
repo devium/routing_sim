@@ -23,6 +23,7 @@ class Network(object):
         self.raw = RawNetwork()
         self.join_nodes()
         self.raw.remove_isolated()
+        self.cached_render_pos = None
 
     def join_nodes(self):
         print('Joining nodes.')
@@ -62,17 +63,18 @@ class Network(object):
             highlighted_nodes: List[List[Node]] = None,
             node_color: Union[Callable[[Node], int], str] = 'grey',
             channel_color: Union[Callable[[Node, Node], int], str] = 'lightgrey',
-            draw_labels: bool=False,
+            labeling_strategy: Callable[[Node], str]=None,
             filepath: str=None
     ) -> bool:
-        pos = self.config.position_strategy.map(self.raw.nodes)
-        first_pos = next(iter(pos.values()))
+        if not self.cached_render_pos or len(self.cached_render_pos) != self.raw.number_of_nodes():
+            self.cached_render_pos = self.config.position_strategy.map(self.raw.nodes)
+        first_pos = next(iter(self.cached_render_pos.values()))
         if len(first_pos) > 2:
             print('Warning: Cannot draw networks with rank higher than 2.')
             return False
         elif len(first_pos) == 1:
-            for node, pos_value in pos.items():
-                pos[node] = np.append(pos_value, [0])
+            for node, pos_value in self.cached_render_pos.items():
+                self.cached_render_pos[node] = np.append(pos_value, [0])
 
         plt.clf()
         fig = plt.gcf()
@@ -97,7 +99,7 @@ class Network(object):
 
         nx.draw_networkx_nodes(
             self.raw,
-            pos,
+            self.cached_render_pos,
             nodelist=nodes,
             node_color=node_color,
             node_size=1,
@@ -107,7 +109,7 @@ class Network(object):
 
         nx.draw_networkx_edges(
             self.raw,
-            pos,
+            self.cached_render_pos,
             edgelist=channels,
             edge_color=channel_color,
             arrows=False,
@@ -120,18 +122,19 @@ class Network(object):
                 for i in range(len(path) - 1):
                     edges.append((path[i], path[i+1]))
             nx.draw_networkx_edges(
-                self.raw, pos, edgelist=edges, edge_color='b', arrows=False, ax=ax
+                self.raw, self.cached_render_pos, edgelist=edges, edge_color='b', arrows=False,
+                ax=ax
             )
 
-        if draw_labels:
-            labels = {node: node.uid for node in self.raw.nodes}
-            nx.draw_networkx_labels(self.raw, pos, labels, font_size=6)
+        if labeling_strategy:
+            labels = {node: labeling_strategy(node) for node in self.raw.nodes}
+            nx.draw_networkx_labels(self.raw, self.cached_render_pos, labels, font_size=6)
 
         if highlighted_nodes:
             for highlighted_node_set in highlighted_nodes:
                 nx.draw_networkx_nodes(
                     self.raw,
-                    pos,
+                    self.cached_render_pos,
                     nodelist=highlighted_node_set,
                     node_size=8,
                     node_color=next(node_color_cycle),

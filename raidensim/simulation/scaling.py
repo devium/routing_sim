@@ -310,12 +310,12 @@ def plot_stats(
 
     ax = axs[0][3]
     ax.set_title('Channel count per node')
-    ax.hist(
-        stats.channel_counts, bins=range(stats.max_channel_count + 2), **styling
-    )
+    log_count = int(math.log2(stats.max_channel_count)) + 1
+    bins = [2**(exp+0.5) for exp in range(log_count + 1)]
+    ax.hist(stats.channel_counts, bins=bins, edgecolor='k', rwidth=1)
     add_labels(ax, ['Mean: {:.2f}'.format(stats.avg_channel_count)])
-    ax.xaxis.set_ticks(range(0, stats.max_channel_count + 1, 2))
-    ax.xaxis.set_ticks(range(0, stats.max_channel_count + 1, 1), minor=True)
+    ax.set_xscale('log', basex=2)
+    ax.xaxis.set_ticks([2 ** exp for exp in range(1, log_count + 1)])
     ax.yaxis.set_major_formatter(formatter)
 
     ax = axs[0][4]

@@ -25,6 +25,9 @@ class PositionStrategy(object):
     def distance(self, a: Node, b: Node):
         raise NotImplementedError
 
+    def label(self, a: Node) -> str:
+        return a.uid
+
     @property
     def plot_limits(self) -> Tuple[FloatRange, FloatRange]:
         raise NotImplementedError
@@ -85,6 +88,9 @@ class HyperbolicPositionStrategy(PositionStrategy):
 
     def distance(self, a: Node, b: Node) -> float:
         return self.disk.node_distance(a, b)
+
+    def label(self, a: Node) -> str:
+        return self.disk.node_to_coord[a][1]
 
     @property
     def plot_limits(self) -> Tuple[FloatRange, FloatRange]:

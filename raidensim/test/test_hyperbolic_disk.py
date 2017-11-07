@@ -33,10 +33,10 @@ def test_coord_to_polar():
 def test_coord_distance():
     disk = HyperbolicDisk(4, 1)
 
-    assert math.isclose(disk.coord_distance([4, 0], [3, 0]), math.cosh(0.25))
-    assert math.isclose(disk.coord_distance([4, 6], [0, 0]), math.cosh(1))
-    assert math.isclose(disk.coord_distance([3, 4], [2, 2]), math.cosh(0.25))
-    assert math.isclose(disk.coord_distance([3, 3], [0, 0]), math.cosh(0.75))
+    assert math.isclose(disk.coord_distance([4, 0], [3, 0]), 0.25)
+    assert math.isclose(disk.coord_distance([4, 6], [0, 0]), 1)
+    assert math.isclose(disk.coord_distance([3, 4], [2, 2]), 0.25)
+    assert math.isclose(disk.coord_distance([3, 3], [0, 0]), 0.75)
     assert math.isclose(disk.coord_distance([3, 7], [3, 6]), disk.coord_distance([3, 6], [3, 7]))
     assert math.isclose(disk.coord_distance([3, 7], [3, 6]), disk.coord_distance([3, 6], [3, 5]))
     assert disk.coord_distance([4, 7], [4, 8]) < disk.coord_distance([4, 7], [4, 9])

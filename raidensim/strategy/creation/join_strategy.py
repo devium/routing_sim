@@ -254,8 +254,8 @@ class RaidenHyperbolicJoinStrategy(JoinStrategy):
 
         self.connection_strategy = BidirectionalConnectionStrategy(deposit_mapping)
         self.node0 = None
-        self.r = 0
-        self.num_ring_nodes = 1
+        self.r = disk.rings[0]
+        self.num_ring_nodes = 2 ** disk.rings[0]
         self.i = 0
 
     def join(self, raw: RawNetwork, node: Node):
@@ -266,7 +266,7 @@ class RaidenHyperbolicJoinStrategy(JoinStrategy):
 
         coord = np.array([self.r, self.i], dtype=int)
         self.disk.add_node(node, coord)
-        for partner in self.disk.inner_coord_partners(coord):
+        for partner in self.disk.coord_partners_approx(coord):
             self.connection_strategy.connect(raw, node, partner)
 
         self.i += 1
