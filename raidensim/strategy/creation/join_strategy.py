@@ -247,17 +247,16 @@ class RaidenLatticeJoinStrategy(DefaultJoinStrategy):
 
 
 class RaidenAnnulusJoinStrategy(JoinStrategy):
-    def __init__(self, annulus: Annulus, min_ring=0):
+    def __init__(self, annulus: Annulus):
         self.annulus = annulus
-        self.min_ring = min_ring
 
         def deposit_mapping(fullness: Fullness):
             return 10
 
         self.connection_strategy = BidirectionalConnectionStrategy(deposit_mapping)
         self.node0 = None
-        self.r = self.min_ring
-        self.num_ring_nodes = 2 ** self.min_ring
+        self.r = self.annulus.min_ring
+        self.num_ring_nodes = 2 ** self.r
         self.i = 0
 
     def join(self, raw: RawNetwork, node: Node):
