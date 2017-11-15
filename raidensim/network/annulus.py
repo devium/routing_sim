@@ -87,22 +87,24 @@ class Annulus:
             else:
                 # Spans entire outward annulus.
                 return 2 ** on_ring
-        elif on_ring < from_ring:
-            # TODO
-            pass
+        else:
+            return -1
 
     def slot_span_range_on(self, coord: DiskCoord, on_ring) -> Tuple[int, int]:
         r, i = coord
-        if r > self.full_span_ring:
-            num_slots = 2 ** on_ring
-            from_ = 2 ** (on_ring - r) * (i + 1) + (
-                2 ** (self.max_ring - on_ring) - 2 ** (self.max_ring - 2 * r + on_ring)
-            ) // 3 - 1
-            to_ = from_ + self.slot_span_on(r, on_ring)
-            return from_ % num_slots, to_ % num_slots
+        if on_ring > r:
+            if r > self.full_span_ring:
+                num_slots = 2 ** on_ring
+                from_ = 2 ** (on_ring - r) * (i + 1) + (
+                    2 ** (self.max_ring - on_ring) - 2 ** (self.max_ring - 2 * r + on_ring)
+                ) // 3 - 1
+                to_ = from_ + self.slot_span_on(r, on_ring)
+                return from_ % num_slots, to_ % num_slots
+            else:
+                # Spans entire outward annulus.
+                return 0, 0
         else:
-            # Spans entire outward annulus.
-            return 0, 0
+            return -1, -1
 
     def num_inward_connections(self, from_ring) -> int:
         if from_ring > self.capped_ring:

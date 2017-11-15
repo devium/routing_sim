@@ -130,31 +130,31 @@ class AnnulusPriorityStrategy(PriorityStrategy):
             target: Node,
             value: int
     ):
+        if v == target:
+            return 0, 0, 0
+
         r_v, i_v = self.annulus.node_to_coord[v]
         r_t, i_t = self.annulus.node_to_coord[target]
 
-        # TODO: REMOVE
-        if tuple(self.annulus.node_to_coord[v]) == (7, 69):
-            print('whoop')
-
-        num_slots = 2 ** r_t
-
         if r_v < r_t:
-            span_begin, span_end = self.annulus.slot_span_range_on((r_v, i_v), r_t)
-            half_span = (span_end - span_begin) % num_slots // 2
-            if span_begin < span_end:
-                in_span = span_begin <= i_t < span_end
-            else:
-                in_span = span_begin <= i_t or i_t < span_end
+            half_span = self.annulus.slot_span_on(r_v, r_t) // 2
         else:
-            in_span = False
+            half_span = 0
 
-        di = i_t - self.annulus.closest_on((r_v, i_v), r_t)
-        di = min(di % num_slots, -di % num_slots) * 2 ** (self.annulus.max_ring - r_t)
+        closest = self.annulus.closest_on((r_v, i_v), r_t)
+        num_slots = 2 ** r_t
+        di = self.annulus.ring_distance_signed(closest, i_t, num_slots)
+        if di > 0:
+            # Closest rounds down to the nearest integer so it favors it <= closest.
+            # E.g. 30 and 31 are both equally far from 15 on the next lower ring but closest will
+            # be 30.
+            di -= 1
 
-        dr = abs(r_v - r_t)
+        di = abs(di) - half_span
+        dr = abs(r_t - r_v)
 
-        if in_span:
+        # di is negative if the target node lies in the outward span.
+        if di < 0:
             return 0, dr, di
         else:
-            return 1, di - half_span, dr
+            return 1, di, dr

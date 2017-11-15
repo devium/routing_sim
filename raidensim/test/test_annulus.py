@@ -407,6 +407,21 @@ def test_ring_distance_signed():
     assert Annulus.ring_distance_signed(11, 0, 21) == 10
 
 
+def test_slot_span_closest():
+    for num_rings in [3, 4, 7, 8, 9, 10]:
+        annulus = Annulus(num_rings)
+        for r in range(annulus.full_span_ring + 1, annulus.max_ring):
+            for rt in range(r + 1, num_rings + 1):
+                num_ring_slots = 2 ** r
+                num_target_ring_slots = 2 ** rt
+                half_span = annulus.slot_span_on(r, rt) // 2
+                for i in range(num_ring_slots):
+                    slot_span_begin, slot_span_end = annulus.slot_span_range_on((r, i), rt)
+                    closest = annulus.closest_on((r, i), rt)
+                    assert (closest - half_span + 1) % num_target_ring_slots == slot_span_begin
+                    assert (closest + half_span + 1) % num_target_ring_slots == slot_span_end
+
+
 def test_full_properties():
     for num_rings in [3, 4, 7, 8, 9, 10]:
         annulus = Annulus(num_rings)
