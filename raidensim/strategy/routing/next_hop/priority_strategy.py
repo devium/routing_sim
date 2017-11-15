@@ -1,7 +1,7 @@
-from typing import Tuple, Union
+from typing import Tuple
 
-import math
-
+from raidensim.network.annulus import Annulus
+from raidensim.network.hyperbolic_disk import HyperbolicDisk
 from raidensim.network.node import Node
 from raidensim.network.raw_network import RawNetwork
 from raidensim.strategy.fee_strategy import FeeStrategy
@@ -114,3 +114,47 @@ class DistanceFeePriorityStrategy(PriorityStrategy):
 
         fee = self.fee_strategy.get_fee(u, v, e, value)
         return distance_penalty, new_distance * self.weights[0] + fee * self.weights[1]
+
+
+class AnnulusPriorityStrategy(PriorityStrategy):
+    def __init__(self, annulus: Annulus):
+        self.annulus = annulus
+
+    def priority(
+            self,
+            raw: RawNetwork,
+            source: Node,
+            u: Node,
+            v: Node,
+            e: dict,
+            target: Node,
+            value: int
+    ):
+        r_v, i_v = self.annulus.node_to_coord[v]
+        r_t, i_t = self.annulus.node_to_coord[target]
+
+        # TODO: REMOVE
+        if tuple(self.annulus.node_to_coord[v]) == (7, 69):
+            print('whoop')
+
+        num_slots = 2 ** r_t
+
+        if r_v < r_t:
+            span_begin, span_end = self.annulus.slot_span_range_on((r_v, i_v), r_t)
+            half_span = (span_end - span_begin) % num_slots // 2
+            if span_begin < span_end:
+                in_span = span_begin <= i_t < span_end
+            else:
+                in_span = span_begin <= i_t or i_t < span_end
+        else:
+            in_span = False
+
+        di = i_t - self.annulus.closest_on((r_v, i_v), r_t)
+        di = min(di % num_slots, -di % num_slots) * 2 ** (self.annulus.max_ring - r_t)
+
+        dr = abs(r_v - r_t)
+
+        if in_span:
+            return 0, dr, di
+        else:
+            return 1, di - half_span, dr

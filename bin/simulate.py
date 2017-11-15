@@ -5,49 +5,52 @@ import random
 
 import math
 
-from raidensim.network.hyperbolic_disk import HyperbolicDisk
+from raidensim.network.annulus import Annulus
 from raidensim.network.network import Network
 
 from raidensim.network.config import NetworkConfiguration
 from raidensim.network.dist import BetaDistribution, MicroRaidenDistribution
 from raidensim.network.lattice import WovenLattice
-from raidensim.network.node import Node
 from raidensim.strategy.fee_strategy import SigmoidNetBalanceFeeStrategy
-from raidensim.strategy.position_strategy import LatticePositionStrategy, RingPositionStrategy, \
-    HyperbolicPositionStrategy
+from raidensim.strategy.position_strategy import (
+    LatticePositionStrategy,
+    RingPositionStrategy,
+    AnnulusPositionStrategy
+)
 from raidensim.strategy.routing.global_routing_strategy import GlobalRoutingStrategy
 from raidensim.strategy.routing.next_hop.greedy_routing_strategy import GreedyRoutingStrategy
 from raidensim.strategy.routing.next_hop.priority_strategy import (
     DistancePriorityStrategy,
-    DistanceFeePriorityStrategy
-)
+    DistanceFeePriorityStrategy,
+    AnnulusPriorityStrategy)
 from raidensim.simulation import simulate_routing, simulate_scaling
 
 from raidensim.strategy.creation.join_strategy import (
     RaidenLatticeJoinStrategy,
     RaidenKademliaJoinStrategy,
     MicroRaidenJoinStrategy,
-    RaidenHyperbolicJoinStrategy)
+    RaidenAnnulusJoinStrategy
+)
 
 SCRIPT_DIR = os.path.dirname(__file__)
 OUT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, '../out'))
 
 
-NUM_NODES = 511
+NUM_NODES = 15
 NODE_FAILURE_RATE = 0.0
 
 MAX_ID = 2**32
 WEAVE_BASE_FACTOR = 2
 MAX_CHANNEL_DISTANCE_ORDER = int(math.log(NUM_NODES, 2 * WEAVE_BASE_FACTOR))
 LATTICE = WovenLattice(1, WEAVE_BASE_FACTOR, 1, max(1, MAX_CHANNEL_DISTANCE_ORDER))
-DISK = HyperbolicDisk((0, 8), 18)
+ANNULUS = Annulus(3)
 
 HYPERBOLIC_NETWORK_CONFIG = NetworkConfiguration(
     num_nodes=NUM_NODES,
     max_id=MAX_ID,
     fullness_dist=BetaDistribution(0.5, 2),
-    position_strategy=HyperbolicPositionStrategy(DISK),
-    join_strategy=RaidenHyperbolicJoinStrategy(DISK)
+    position_strategy=AnnulusPositionStrategy(ANNULUS),
+    join_strategy=RaidenAnnulusJoinStrategy(ANNULUS)
 )
 
 LATTICE_NETWORK_CONFIG = NetworkConfiguration(
@@ -104,6 +107,7 @@ def run():
     fee_greedy_routing = GreedyRoutingStrategy(
         DistanceFeePriorityStrategy(config.position_strategy, fee_strategy, (1.0, 0.1))
     )
+    annulus_greedy_routing = GreedyRoutingStrategy(AnnulusPriorityStrategy(ANNULUS))
 
     now = datetime.datetime.now()
     now = now.replace(microsecond=0)
@@ -116,8 +120,9 @@ def run():
     # Routing simulation + animation.
     routing_strategies = [
         # ('global', global_routing),
-        ('greedy_distance', distance_greedy_routing),
+        # ('greedy_distance', distance_greedy_routing),
         # ('greedy_fee_distance', fee_greedy_routing)
+        ('greedy_annulus', annulus_greedy_routing)
     ]
 
     # Network scaling simulation.
@@ -140,8 +145,8 @@ def run():
         simulate_routing(
             net,
             dirpath,
-            num_sample_nodes=20,
-            num_paths=5,
+            num_sample_nodes=5,
+            num_paths=0,
             transfer_value=1,
             routing_strategies=routing_strategies,
             max_gif_frames=30

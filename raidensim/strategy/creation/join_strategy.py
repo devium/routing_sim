@@ -3,6 +3,7 @@ from typing import Callable
 
 import numpy as np
 
+from raidensim.network.annulus import Annulus
 from raidensim.network.hyperbolic_disk import HyperbolicDisk
 from raidensim.network.lattice import WovenLattice
 from raidensim.network.node import Node
@@ -245,17 +246,18 @@ class RaidenLatticeJoinStrategy(DefaultJoinStrategy):
         return self.lattice.num_required_channels
 
 
-class RaidenHyperbolicJoinStrategy(JoinStrategy):
-    def __init__(self, disk: HyperbolicDisk):
-        self.disk = disk
+class RaidenAnnulusJoinStrategy(JoinStrategy):
+    def __init__(self, annulus: Annulus, min_ring=0):
+        self.annulus = annulus
+        self.min_ring = min_ring
 
         def deposit_mapping(fullness: Fullness):
             return 10
 
         self.connection_strategy = BidirectionalConnectionStrategy(deposit_mapping)
         self.node0 = None
-        self.r = disk.rings[0]
-        self.num_ring_nodes = 2 ** disk.rings[0]
+        self.r = self.min_ring
+        self.num_ring_nodes = 2 ** self.min_ring
         self.i = 0
 
     def join(self, raw: RawNetwork, node: Node):
@@ -265,8 +267,8 @@ class RaidenHyperbolicJoinStrategy(JoinStrategy):
             self.i = 0
 
         coord = np.array([self.r, self.i], dtype=int)
-        self.disk.add_node(node, coord)
-        for partner in self.disk.coord_partners_approx(coord):
+        self.annulus.add_node(node, coord)
+        for partner in self.annulus.coord_partners(coord):
             self.connection_strategy.connect(raw, node, partner)
 
         self.i += 1

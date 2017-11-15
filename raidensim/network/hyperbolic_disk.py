@@ -35,23 +35,6 @@ class HyperbolicDisk:
     def coord_distance(self, a: DiskCoord, b: DiskCoord):
         return self.polar_distance(self.coord_to_polar(a), self.coord_to_polar(b))
 
-    def node_distance_approx(self, a: Node, b: Node):
-        return self.coord_distance_approx(self.node_to_coord[a], self.node_to_coord[b])
-
-    def coord_distance_approx(self, a: DiskCoord, b: DiskCoord):
-        a_r, a_i = a
-        a_r = int(a_r)
-        a_global_i = int(a_i * 2 ** (self.rings[1] - a_r))
-
-        b_r, b_i = b
-        b_r = int(b_r)
-        b_global_i = int(b_i * 2 ** (self.rings[1] - b_r))
-
-        return min(
-            (a_global_i - b_global_i) % self.max_i,
-            (b_global_i - a_global_i) % self.max_i
-        ) + abs(a_r - b_r)
-
     def coord_to_polar(self, coord: DiskCoord) -> PolarCoord:
         r = coord[0] / self.rings[1] * self.radius
         dtheta = 2 * math.pi / 2 ** coord[0]
@@ -117,49 +100,6 @@ class HyperbolicDisk:
                 i1 = (ri0 + num_ring_slots // 2) % num_ring_slots
                 if self.coord_distance(coord, [r, i1]) <= self.radius:
                     yield np.array([r, i1])
-
-    def coord_partners_approx(self, coord: DiskCoord) -> Iterator[Node]:
-        return (
-            self.coord_to_node[tuple(coord)] for coord in self.partner_coords_approx(coord)
-            if tuple(coord) in self.coord_to_node
-        )
-
-    def partner_coords_approx(self, coord: DiskCoord):
-        r, i = coord
-        r = int(r)
-
-        # Inward connections.
-        rt = r - 1
-        it = i
-        num_connections = int(2 ** (self.rings[1] - r))
-        num_ring_slots = int(2 ** rt)
-        num_connections = min(num_connections, num_ring_slots)
-
-        while num_connections > 0:
-            first = (it - num_connections + 1) // 2
-            for j in range(first, first + num_connections):
-                yield np.array([rt, j % num_ring_slots], dtype=int)
-            rt -= 1
-            it //= 2
-            num_connections //= 2
-            num_ring_slots //= 2
-
-        # Outward connections.
-        rt = r + 1
-        it = i * 2
-        rmax = (self.rings[1] + r + 1) // 2
-        num_connections = int(2 ** (self.rings[1] - r))
-        num_ring_slots = int(2 ** rt)
-        num_connections = min(num_connections, num_ring_slots)
-
-        while rt <= rmax:
-            first = it - num_connections // 2 + 1
-            for j in range(first, first + num_connections):
-                yield np.array([rt, j % num_ring_slots])
-            rt += 1
-            it = 2 * it + 1
-            num_connections //= 2
-            num_ring_slots *= 2
 
     @staticmethod
     def polar_distance(a: PolarCoord, b: PolarCoord):

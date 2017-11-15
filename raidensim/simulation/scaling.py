@@ -2,9 +2,11 @@ import math
 import os
 import time
 from typing import List, Dict, Union
+from collections import Counter
 
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mtick
+import numpy as np
 
 from raidensim.network.network import Network
 from raidensim.network.node import Node
@@ -22,34 +24,45 @@ class ConstantNetworkStats:
         raw = net.raw
         self.num_nodes = raw.number_of_nodes()
         self.num_required_channels = net.config.join_strategy.num_required_channels
-        self.channel_counts = [num_channels for node, num_channels in raw.out_degree]
-        self.max_channel_count = max(self.channel_counts)
-        self.avg_channel_count = sum(self.channel_counts) / len(self.channel_counts)
-        self.channel_distances = (
-            net.config.position_strategy.distance(u, v) for u, v, e in raw.bi_edges
-        )
-        self.channel_distances = [distance for distance in self.channel_distances if distance > 1]
-        self.max_distance = max(self.channel_distances)
+        self.channel_counts = Counter(num_channels for node, num_channels in raw.out_degree)
+        self.max_channel_count = max(self.channel_counts.keys())
+        self.avg_channel_count = sum(
+            num_channels * count for num_channels, count in self.channel_counts.items()
+        ) / sum(self.channel_counts.values()) / len(self.channel_counts)
+        # FIXME: channel distance analysis temporarily disabled for speedup
+        # self.channel_distances = Counter(
+        #     2 ** int(math.log2(net.config.position_strategy.distance(u, v)))
+        #     for u, v, e in raw.bi_edges
+        # )
+        self.channel_distances = {1: 1}
+        self.max_distance = max(self.channel_distances.keys())
+        self.min_distance = min(self.channel_distances.keys())
 
 
 class MutableNetworkStats:
+    BALANCE_BIN_SIZE = 1
+
     def __init__(self, net: Network):
         print('Collecting mutable network stats.')
 
         raw = net.raw
-        self.capacities = [e['capacity'] for u, v, e in raw.edges(data=True)]
-        self.max_capacity = max(self.capacities)
-        self.net_balances = [abs(e['net_balance']) for u, v, e in raw.bi_edges]
-        self.max_net_balance = max(self.net_balances)
-        self.imbalances = [abs(e['imbalance']) for u, v, e in raw.bi_edges]
+        self.capacities = Counter(e['capacity'] for u, v, e in raw.edges(data=True))
+        self.max_capacity = max(self.capacities.keys())
+
+        self.net_balances = Counter(abs(e['net_balance']) for u, v, e in raw.bi_edges)
+        self.max_net_balance = max(self.net_balances.keys())
+
+        self.imbalances = Counter(abs(e['imbalance']) for u, v, e in raw.bi_edges)
         self.max_imbalance = max(self.imbalances)
+
         self.num_channels_uni = raw.number_of_edges()
         self.num_depleted_channels = sum(1 for e in raw.edges.values() if e['capacity'] == 0)
+
         self.net_balance_stdev = math.sqrt(
-            sum(x ** 2 for x in self.net_balances) / len(self.net_balances)
+            sum(count * x ** 2 for x, count in self.net_balances.items()) / len(self.net_balances)
         )
         self.imbalance_stdev = math.sqrt(
-            sum(x ** 2 for x in self.imbalances) / len(self.imbalances)
+            sum(count * x ** 2 for x, count in self.imbalances.items()) / len(self.imbalances)
         )
 
 
@@ -232,11 +245,6 @@ def plot_stats(
     fig, axs = plt.subplots(3, 5)
     fig.set_size_inches(22, 10)
 
-    styling = {
-        'align': 'left',
-        'edgecolor': 'k'
-    }
-
     def add_labels(ax, labels: List[str], align='right'):
         x = 0.97 if align == 'right' else 0.03
         for line, label in enumerate(labels):
@@ -248,62 +256,60 @@ def plot_stats(
 
     ax = axs[0][0]
     ax.set_title('Channel capacity before')
-    ax.hist(
-        pre_stats.capacities, bins=range(max_capacity + 2), range=[0, max_capacity], **styling
-    )
+    x, y = zip(*pre_stats.capacities.items())
+    ax.bar(x, y, ec='k')
     add_labels(ax, ['Depleted: {}'.format(pre_stats.num_depleted_channels)])
+    ax.set_xlim(-1, max_capacity + 1)
     ax.yaxis.set_major_formatter(formatter)
     ax.xaxis.set_ticks(range(0, max_capacity + 1, 5))
     ax.xaxis.set_ticks(range(0, max_capacity + 1, 1), minor=True)
 
     ax = axs[1][0]
     ax.set_title('Channel capacity after')
-    ax.hist(
-        post_stats.capacities, bins=range(max_capacity + 2), range=[0, max_capacity], **styling
-    )
+    x, y = zip(*post_stats.capacities.items())
+    ax.bar(x, y, ec='k')
     add_labels(ax, ['Depleted: {}'.format(post_stats.num_depleted_channels)])
+    ax.set_xlim(-1, max_capacity + 1)
     ax.xaxis.set_ticks(range(0, max_capacity + 1, 5))
     ax.xaxis.set_ticks(range(0, max_capacity + 1, 1), minor=True)
     ax.yaxis.set_major_formatter(formatter)
 
     ax = axs[0][1]
     ax.set_title('Abs. channel net balance before')
-    ax.hist(
-        pre_stats.net_balances, bins=range(max_net_balance + 2), range=[0, max_net_balance],
-        **styling
-    )
+    x, y = zip(*pre_stats.net_balances.items())
+    ax.bar(x, y, ec='k')
     add_labels(ax, ['SD: {:.2f}'.format(pre_stats.net_balance_stdev)])
+    ax.set_xlim(-1, max_net_balance + 1)
     ax.xaxis.set_ticks(range(0, max_net_balance + 1, 5))
     ax.xaxis.set_ticks(range(0, max_net_balance + 1, 1), minor=True)
     ax.yaxis.set_major_formatter(formatter)
 
     ax = axs[1][1]
     ax.set_title('Abs. channel net balance after')
-    ax.hist(
-        post_stats.net_balances, bins=range(max_net_balance + 2), range=[0, max_net_balance],
-        **styling
-    )
+    x, y = zip(*post_stats.net_balances.items())
+    ax.bar(x, y, ec='k')
     add_labels(ax, ['SD: {:.2f}'.format(post_stats.net_balance_stdev)])
+    ax.set_xlim(-1, max_net_balance + 1)
     ax.xaxis.set_ticks(range(0, max_net_balance + 1, 5))
     ax.xaxis.set_ticks(range(0, max_net_balance + 1, 1), minor=True)
     ax.yaxis.set_major_formatter(formatter)
 
     ax = axs[0][2]
     ax.set_title('Channel imbalance before')
-    ax.hist(
-        pre_stats.imbalances, bins=range(max_imbalance + 2), range=[0, max_imbalance], **styling
-    )
+    x, y = zip(*pre_stats.imbalances.items())
+    ax.bar(x, y, ec='k')
     add_labels(ax, ['SD: {:.2f}'.format(pre_stats.imbalance_stdev)])
+    ax.set_xlim(-1, max_imbalance + 1)
     ax.xaxis.set_ticks(range(0, max_imbalance + 1, 5))
     ax.xaxis.set_ticks(range(0, max_imbalance + 1, 1), minor=True)
     ax.yaxis.set_major_formatter(formatter)
 
     ax = axs[1][2]
     ax.set_title('Channel imbalance after')
-    ax.hist(
-        post_stats.imbalances, bins=range(max_imbalance + 2), range=[0, max_imbalance], **styling
-    )
+    x, y = zip(*post_stats.imbalances.items())
+    ax.bar(x, y, ec='k')
     add_labels(ax, ['SD: {:.2f}'.format(post_stats.imbalance_stdev)])
+    ax.set_xlim(-1, max_imbalance + 1)
     ax.xaxis.set_ticks(range(0, max_imbalance + 1, 5))
     ax.xaxis.set_ticks(range(0, max_imbalance + 1, 1), minor=True)
     ax.yaxis.set_major_formatter(formatter)
@@ -311,26 +317,27 @@ def plot_stats(
     ax = axs[0][3]
     ax.set_title('Channel count per node')
     log_count = int(math.log2(stats.max_channel_count)) + 1
-    bins = [2**(exp+0.5) for exp in range(log_count + 1)]
-    ax.hist(stats.channel_counts, bins=bins, edgecolor='k', rwidth=1)
+    x, y = zip(*stats.channel_counts.items())
+    ax.bar(x, y, width=np.array(x) / 4, ec='k')
     add_labels(ax, ['Mean: {:.2f}'.format(stats.avg_channel_count)])
     ax.set_xscale('log', basex=2)
-    ax.xaxis.set_ticks([2 ** exp for exp in range(1, log_count + 1)])
+    ax.xaxis.set_ticks([2 ** exp for exp in range(log_count + 1)])
     ax.yaxis.set_major_formatter(formatter)
 
     ax = axs[0][4]
     ax.set_title('Channel distances > 1')
-    log_distance = int(math.log2(stats.max_distance)) + 1
-    bins = [2**(exp+0.5) for exp in range(log_distance + 1)]
-    ax.hist(stats.channel_distances, bins=bins, edgecolor='k', rwidth=1)
+    log_min_distance = int(math.log2(stats.min_distance))
+    log_max_distance = int(math.log2(stats.max_distance)) + 1
+    x, y = zip(*stats.channel_distances.items())
+    ax.bar(x, y, width=np.array(x) / 4, ec='k')
     ax.set_xscale('log', basex=2)
-    ax.xaxis.set_ticks([2 ** exp for exp in range(1, log_distance + 1)])
+    ax.xaxis.set_ticks([2 ** exp for exp in range(log_min_distance, log_max_distance + 1)])
     ax.yaxis.set_major_formatter(formatter)
 
     ax = axs[1][3]
     ax.set_title('Failed transfers over time')
     ax.hist(
-        sim_stats.failed, bins=80, range=[0, sim_stats.num_transfers], edgecolor='black'
+        sim_stats.failed, bins=80, range=[0, sim_stats.num_transfers], ec='k'
     )
     add_labels(ax, ['Total: {}'.format(len(sim_stats.failed))])
     ax.yaxis.set_major_formatter(formatter)
@@ -340,7 +347,7 @@ def plot_stats(
     transfer_ids, fees = zip(*sim_stats.fees)
     bin_scale = sim_stats.num_transfers / 80
     fees = [fee / bin_scale for fee in fees]
-    ax.hist(transfer_ids, bins=80, weights=fees, **styling)
+    ax.hist(transfer_ids, bins=80, weights=fees, ec='k')
     add_labels(ax, ['Mean: {:.2f}'.format(sim_stats.avg_fee)])
     ax.yaxis.set_major_formatter(formatter)
 
@@ -357,7 +364,7 @@ def plot_stats(
         sim_stats.transfer_hops,
         bins=range(sim_stats.max_transfer_hops + 2),
         range=[0, sim_stats.max_transfer_hops],
-        **styling
+        ec='k'
     )
     add_labels(ax, ['Mean: {:.2f}'.format(sim_stats.avg_transfer_hops)])
     ax.xaxis.set_ticks(range(0, sim_stats.max_transfer_hops + 1, 5))

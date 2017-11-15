@@ -4,6 +4,7 @@ import math
 
 import numpy as np
 
+from raidensim.network.annulus import Annulus
 from raidensim.network.hyperbolic_disk import HyperbolicDisk
 from raidensim.network.lattice import Lattice
 from raidensim.network.node import Node
@@ -91,6 +92,26 @@ class HyperbolicPositionStrategy(PositionStrategy):
 
     def label(self, a: Node) -> str:
         return self.disk.node_to_coord[a][1]
+
+    @property
+    def plot_limits(self) -> Tuple[FloatRange, FloatRange]:
+        return (-1.1, 1.1), (-1.1, 1.1)
+
+
+class AnnulusPositionStrategy(PositionStrategy):
+    def __init__(self, annulus: Annulus):
+        self.annulus = annulus
+
+    def _map_node(self, node: Node) -> np.array:
+        coord = self.annulus.node_to_coord[node]
+        r, theta = self.annulus.coord_to_polar(coord)
+        return np.array([math.cos(theta) * r, math.sin(theta) * r])
+
+    def distance(self, a: Node, b: Node) -> float:
+        return self.annulus.node_distance(a, b)
+
+    def label(self, a: Node) -> str:
+        return self.annulus.node_to_coord[a][1]
 
     @property
     def plot_limits(self) -> Tuple[FloatRange, FloatRange]:
