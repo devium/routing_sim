@@ -11,6 +11,9 @@ class Annulus:
     def __init__(self, max_ring: int):
         self.max_ring = max_ring
         self.min_ring = max_ring // 2
+        self.channels_per_ring = [
+            self.num_connections(r) for r in range(self.max_ring, self.min_ring - 1, -1)
+        ]
 
         self.node_to_coord = {}
         self.coord_to_node = {}
@@ -92,19 +95,33 @@ class Annulus:
         else:
             return -1, -1
 
-    def num_inward_connections(self, from_ring) -> int:
+    def num_inward_connections(self, from_ring: int) -> int:
         rank = self.rank(from_ring)
         return 2 ** rank - 2 ** max(0, rank - from_ring + self.min_ring)
 
-    def num_outward_connections(self, from_ring) -> int:
+    def num_outward_connections(self, from_ring: int) -> int:
         if from_ring < self.max_ring:
             rank = self.rank(from_ring)
             return 2 ** rank - 2 ** (rank - rank // 2)
         else:
             return 0
 
-    def num_connections(self, from_ring) -> int:
+    def num_connections(self, from_ring: int) -> int:
         return self.num_inward_connections(from_ring) + self.num_outward_connections(from_ring)
+
+    def ring_recommendation(self, num_channels: int):
+        """
+        Brute-force iteration over rings from the largest ring inward.
+        """
+        try:
+            dr = next(
+                dr for dr, required_channels in enumerate(self.channels_per_ring)
+                if required_channels > num_channels
+            )
+        except StopIteration:
+            return self.min_ring
+
+        return self.max_ring - dr
 
     @staticmethod
     def closest_on(coord: DiskCoord, ring: int) -> int:
@@ -117,6 +134,9 @@ class Annulus:
     def add_node(self, node: Node, coord: DiskCoord):
         r, i = coord
         assert self.min_ring <= r <= self.max_ring
+        # TODO REMOVE
+        if not 0 <= i < 2**r:
+            print('whoop')
         assert 0 <= i < 2**r
         self.node_to_coord[node] = np.array(coord, dtype=int)
         coord_fixed = tuple(coord)

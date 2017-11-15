@@ -2,6 +2,7 @@ import random
 from typing import Callable
 
 import numpy as np
+from collections import defaultdict
 
 from raidensim.network.annulus import Annulus
 from raidensim.network.hyperbolic_disk import HyperbolicDisk
@@ -29,7 +30,7 @@ from .selection_strategy import (
     FirstMatchSelectionStrategy,
     RandomAuxLatticeSelectionStrategy,
     RandomSelectionStrategy)
-from raidensim.types import Fullness, IntRange
+from raidensim.types import Fullness, IntRange, DiskCoord
 
 
 def linear_int(min_: int, max_: int, fullness: float) -> int:
@@ -246,7 +247,7 @@ class RaidenLatticeJoinStrategy(DefaultJoinStrategy):
         return self.lattice.num_required_channels
 
 
-class RaidenAnnulusJoinStrategy(JoinStrategy):
+class FullAnnulusJoinStrategy(JoinStrategy):
     def __init__(self, annulus: Annulus):
         self.annulus = annulus
 
@@ -271,6 +272,72 @@ class RaidenAnnulusJoinStrategy(JoinStrategy):
             self.connection_strategy.connect(raw, node, partner)
 
         self.i += 1
+
+    @property
+    def num_required_channels(self):
+        return 0
+
+
+class SmartAnnulusJoinStrategy(JoinStrategy):
+    def __init__(self, annulus: Annulus):
+        self.annulus = annulus
+        self.ring_to_index_to_attractiveness = defaultdict(lambda: defaultdict(int))
+
+        def deposit_mapping(fullness: Fullness):
+            return 10
+
+        def num_channel_mapping(fullness: Fullness):
+            return 1 + int(fullness * 50)
+
+        self.connection_strategy = BidirectionalConnectionStrategy(deposit_mapping)
+        self.num_channel_mapping = num_channel_mapping
+
+    def _get_attractive_slot(self, r: int) -> int:
+        index_to_attractiveness = self.ring_to_index_to_attractiveness[r]
+        if not index_to_attractiveness:
+            num_slots = 2 ** r
+            i = -1
+            while i == -1:
+                try:
+                    i = next(
+                        i for i in range(num_slots) if (r, i) not in self.annulus.coord_to_node
+                    )
+                except StopIteration:
+                    print('Ring {} full. Trying next higher ring.'.format(r))
+                    r += 1
+                    if r < self.annulus.min_ring:
+                        raise ValueError('All suitable rings full.')
+                    num_slots *= 2
+
+            return i
+        else:
+            return max(
+                (attractiveness, i) for i, attractiveness in index_to_attractiveness.items()
+            )[1]
+
+    def join(self, raw: RawNetwork, node: Node):
+        # TODO REMOVE
+        if node.uid == 2105906981:
+            print('whoop')
+        num_channels = self.num_channel_mapping(node.fullness)
+        r = self.annulus.ring_recommendation(num_channels)
+
+        i = self._get_attractive_slot(r)
+
+        index_to_attractiveness = self.ring_to_index_to_attractiveness[r]
+        if i in index_to_attractiveness:
+            del index_to_attractiveness[i]
+
+        self.annulus.add_node(node, (r, i))
+
+        for partner in self.annulus.partner_coords((r, i)):
+            r_t, i_t = tuple(partner)
+            if (r_t, i_t) in self.annulus.coord_to_node:
+                self.connection_strategy.connect(
+                    raw, node, self.annulus.coord_to_node[r_t, i_t]
+                )
+            else:
+                self.ring_to_index_to_attractiveness[r_t][i_t] += 1
 
     @property
     def num_required_channels(self):

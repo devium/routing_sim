@@ -29,28 +29,28 @@ from raidensim.strategy.creation.join_strategy import (
     RaidenLatticeJoinStrategy,
     RaidenKademliaJoinStrategy,
     MicroRaidenJoinStrategy,
-    RaidenAnnulusJoinStrategy
-)
+    FullAnnulusJoinStrategy,
+    SmartAnnulusJoinStrategy)
 
 SCRIPT_DIR = os.path.dirname(__file__)
 OUT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, '../out'))
 
 
-NUM_NODES = 496
+NUM_NODES = 300
 NODE_FAILURE_RATE = 0.0
 
 MAX_ID = 2**32
 WEAVE_BASE_FACTOR = 2
 MAX_CHANNEL_DISTANCE_ORDER = int(math.log(NUM_NODES, 2 * WEAVE_BASE_FACTOR))
 LATTICE = WovenLattice(1, WEAVE_BASE_FACTOR, 1, max(1, MAX_CHANNEL_DISTANCE_ORDER))
-ANNULUS = Annulus(8)
+ANNULUS = Annulus(10)
 
 HYPERBOLIC_NETWORK_CONFIG = NetworkConfiguration(
     num_nodes=NUM_NODES,
     max_id=MAX_ID,
     fullness_dist=BetaDistribution(0.5, 2),
     position_strategy=AnnulusPositionStrategy(ANNULUS),
-    join_strategy=RaidenAnnulusJoinStrategy(ANNULUS)
+    join_strategy=SmartAnnulusJoinStrategy(ANNULUS)
 )
 
 LATTICE_NETWORK_CONFIG = NetworkConfiguration(
