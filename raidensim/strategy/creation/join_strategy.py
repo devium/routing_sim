@@ -316,9 +316,6 @@ class SmartAnnulusJoinStrategy(JoinStrategy):
             )[1]
 
     def join(self, raw: RawNetwork, node: Node):
-        # TODO REMOVE
-        if node.uid == 2105906981:
-            print('whoop')
         num_channels = self.num_channel_mapping(node.fullness)
         r = self.annulus.ring_recommendation(num_channels)
 

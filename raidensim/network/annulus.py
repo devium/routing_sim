@@ -134,9 +134,6 @@ class Annulus:
     def add_node(self, node: Node, coord: DiskCoord):
         r, i = coord
         assert self.min_ring <= r <= self.max_ring
-        # TODO REMOVE
-        if not 0 <= i < 2**r:
-            print('whoop')
         assert 0 <= i < 2**r
         self.node_to_coord[node] = np.array(coord, dtype=int)
         coord_fixed = tuple(coord)
