@@ -287,7 +287,7 @@ class SmartAnnulusJoinStrategy(JoinStrategy):
             return 10
 
         def num_channel_mapping(fullness: Fullness):
-            return 1 + int(fullness * 50)
+            return max(1, int(fullness * 60))
 
         self.connection_strategy = BidirectionalConnectionStrategy(deposit_mapping)
         self.num_channel_mapping = num_channel_mapping

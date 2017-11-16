@@ -121,7 +121,7 @@ class Annulus:
         except StopIteration:
             return self.min_ring
 
-        return self.max_ring - dr
+        return self.max_ring - dr + 1
 
     @staticmethod
     def closest_on(coord: DiskCoord, ring: int) -> int:
@@ -160,7 +160,6 @@ class Annulus:
         it = i
         num_connections = int(2 ** (self.max_ring - r))
         num_ring_slots = int(2 ** rt)
-        num_connections = min(num_connections, num_ring_slots)
 
         while num_connections > 0 and rt >= self.min_ring:
             first = (it - num_connections + 1) // 2
@@ -179,9 +178,8 @@ class Annulus:
         num_ring_slots = int(2 ** rt)
 
         while rt <= rmax:
-            capped_num_connections = min(num_connections, num_ring_slots)
-            first = it - capped_num_connections // 2 + 1
-            for j in range(first, first + capped_num_connections):
+            first = it - num_connections // 2 + 1
+            for j in range(first, first + num_connections):
                 yield np.array([rt, j % num_ring_slots])
             rt += 1
             it = 2 * it + 1

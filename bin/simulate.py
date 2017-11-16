@@ -30,7 +30,8 @@ from raidensim.strategy.creation.join_strategy import (
     RaidenKademliaJoinStrategy,
     MicroRaidenJoinStrategy,
     FullAnnulusJoinStrategy,
-    SmartAnnulusJoinStrategy)
+    SmartAnnulusJoinStrategy
+)
 
 SCRIPT_DIR = os.path.dirname(__file__)
 OUT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, '../out'))
@@ -126,7 +127,7 @@ def run():
     ]
 
     # Network scaling simulation.
-    if True:
+    if False:
         for name, routing_strategy in routing_strategies:
             simulate_scaling(
                 net,
@@ -146,7 +147,7 @@ def run():
             net,
             dirpath,
             num_sample_nodes=5,
-            num_paths=20,
+            num_paths=10,
             transfer_value=1,
             routing_strategies=routing_strategies,
             max_gif_frames=30
