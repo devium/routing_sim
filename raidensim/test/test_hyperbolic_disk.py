@@ -7,7 +7,7 @@ from raidensim.network.hyperbolic_disk import HyperbolicDisk
 
 
 def test_coord_to_polar():
-    disk = HyperbolicDisk(4, 1)
+    disk = HyperbolicDisk((0, 4), 1)
 
     r, theta = disk.coord_to_polar([4, 0])
     assert math.isclose(r, 1)
@@ -31,7 +31,7 @@ def test_coord_to_polar():
 
 
 def test_coord_distance():
-    disk = HyperbolicDisk(4, 1)
+    disk = HyperbolicDisk((0, 4), 1)
 
     assert math.isclose(disk.coord_distance([4, 0], [3, 0]), 0.25)
     assert math.isclose(disk.coord_distance([4, 6], [0, 0]), 1)
@@ -44,7 +44,7 @@ def test_coord_distance():
 
 
 def test_inner_partners():
-    disk = HyperbolicDisk(5, 2)
+    disk = HyperbolicDisk((0, 5), 2)
     partners = list(disk.inner_partner_coords([4, 15]))
     assert len(partners) == 13
     expected = [
@@ -64,7 +64,7 @@ def test_inner_partners():
     ]
     assert all(np.array_equal(partners[i], expected[i]) for i in range(len(expected)))
 
-    disk = HyperbolicDisk(5, 4)
+    disk = HyperbolicDisk((0, 5), 4)
     partners = list(disk.inner_partner_coords([4, 15]))
     assert len(partners) == 9
     expected = [
@@ -80,7 +80,7 @@ def test_inner_partners():
     ]
     assert all(np.array_equal(partners[i], expected[i]) for i in range(len(expected)))
 
-    disk = HyperbolicDisk(5, 8)
+    disk = HyperbolicDisk((0, 5), 8)
     partners = list(disk.inner_partner_coords([4, 15]))
     assert len(partners) == 6
     expected = [
@@ -95,7 +95,7 @@ def test_inner_partners():
 
 
 def test_outer_partners():
-    disk = HyperbolicDisk(5, 4)
+    disk = HyperbolicDisk((0, 5), 4)
     partners = list(disk.outer_partner_coords([3, 5]))
     assert len(partners) == 10
     expected = [
@@ -114,5 +114,5 @@ def test_outer_partners():
 
 
 def test_partner_count():
-    disk = HyperbolicDisk(6, 16)
+    disk = HyperbolicDisk((0, 6), 16)
 

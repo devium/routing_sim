@@ -87,11 +87,13 @@ class Annulus:
         r, i = coord
         if on_ring > r:
             num_slots = 2 ** on_ring
-            from_ = 2 ** (on_ring - r) * (i + 1) + (
-                2 ** (self.max_ring - on_ring) - 2 ** (self.max_ring - 2 * r + on_ring)
-            ) // 3 - 1
-            to_ = from_ + self.slot_span_on(r, on_ring)
-            return from_ % num_slots, to_ % num_slots
+            pow_rdiff = 2 ** (on_ring - r)
+            partial_half_span = 2 ** (self.max_ring - 2 * r + on_ring)
+            partial_half_span -= 2 ** (self.max_ring - on_ring)
+            partial_half_span //= 3
+            begin = pow_rdiff * (i + 1) - partial_half_span - 1
+            end = pow_rdiff * i + partial_half_span + 1
+            return begin % num_slots, end % num_slots
         else:
             return -1, -1
 

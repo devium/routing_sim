@@ -19,8 +19,8 @@ def test_channel_attributes(network_2_nodes: Network):
     raw = net.raw
     a = next(node for node in raw.nodes if node.fullness == 0)
     b = next(node for node in raw.nodes if node.fullness == 1)
-    assert len(raw.neighbors(a)) == 1
-    assert len(raw.neighbors(b)) == 1
+    assert raw.out_degree(a) == 1
+    assert raw.out_degree(b) == 1
 
     ab, ba = raw.edges[a, b], raw.edges[b, a]
     assert ab['balance'] == 0

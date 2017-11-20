@@ -37,21 +37,22 @@ SCRIPT_DIR = os.path.dirname(__file__)
 OUT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, '../out'))
 
 
-NUM_NODES = 300
+ANNULUS_MAX_RING = 8
+NUM_NODES = 2 ** (ANNULUS_MAX_RING + 1) - 2 ** (ANNULUS_MAX_RING // 2)
 NODE_FAILURE_RATE = 0.0
 
 MAX_ID = 2**32
 WEAVE_BASE_FACTOR = 2
 MAX_CHANNEL_DISTANCE_ORDER = int(math.log(NUM_NODES, 2 * WEAVE_BASE_FACTOR))
 LATTICE = WovenLattice(1, WEAVE_BASE_FACTOR, 1, max(1, MAX_CHANNEL_DISTANCE_ORDER))
-ANNULUS = Annulus(10)
+ANNULUS = Annulus(ANNULUS_MAX_RING)
 
 HYPERBOLIC_NETWORK_CONFIG = NetworkConfiguration(
     num_nodes=NUM_NODES,
     max_id=MAX_ID,
     fullness_dist=BetaDistribution(0.5, 2),
     position_strategy=AnnulusPositionStrategy(ANNULUS),
-    join_strategy=SmartAnnulusJoinStrategy(ANNULUS)
+    join_strategy=FullAnnulusJoinStrategy(ANNULUS)
 )
 
 LATTICE_NETWORK_CONFIG = NetworkConfiguration(
@@ -127,12 +128,12 @@ def run():
     ]
 
     # Network scaling simulation.
-    if False:
+    if True:
         for name, routing_strategy in routing_strategies:
             simulate_scaling(
                 net,
                 dirpath,
-                num_transfers=1000,
+                num_transfers=10000,
                 transfer_value=1,
                 position_strategy=config.position_strategy,
                 routing_strategy=routing_strategy,
@@ -147,7 +148,7 @@ def run():
             net,
             dirpath,
             num_sample_nodes=5,
-            num_paths=10,
+            num_paths=3,
             transfer_value=1,
             routing_strategies=routing_strategies,
             max_gif_frames=30

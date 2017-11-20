@@ -38,7 +38,7 @@ class HyperbolicDisk:
     def coord_to_polar(self, coord: DiskCoord) -> PolarCoord:
         r = coord[0] / self.rings[1] * self.radius
         dtheta = 2 * math.pi / 2 ** coord[0]
-        theta = (coord[1] + 0.5) * dtheta
+        theta = coord[1] * dtheta
         return np.array([r, theta])
 
     def inner_coord_partners(self, coord: DiskCoord) -> Iterator[DiskCoord]:
@@ -112,9 +112,7 @@ class HyperbolicDisk:
         # Manual hyperbolic function calculation excluding monotonic transformations to save some
         # time.
         # Actual function: acosh(cosh(a_r)*cosh(b_r)-sinh(a_r)*sinh(b_r)*cos(b_theta-a_theta))
-        ea = math.exp(a_r)
-        ea_inv = 1 / ea
-        eb = math.exp(b_r)
-        eb_inv = 1 / eb
-        return (ea + ea_inv) * (eb + eb_inv) - (ea - ea_inv) * (eb - eb_inv) \
-            * math.cos(b_theta - a_theta)
+        return math.acosh(
+            math.cosh(a_r) * math.cosh(b_r) -
+            math.sinh(a_r) * math.sinh(b_r) * math.cos(b_theta - a_theta)
+        )

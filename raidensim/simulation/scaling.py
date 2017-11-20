@@ -364,6 +364,7 @@ def plot_stats(
         sim_stats.transfer_hops,
         bins=range(sim_stats.max_transfer_hops + 2),
         range=[0, sim_stats.max_transfer_hops],
+        align='left',
         ec='k'
     )
     add_labels(ax, ['Mean: {:.2f}'.format(sim_stats.avg_transfer_hops)])
