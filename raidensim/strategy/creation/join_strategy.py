@@ -1,5 +1,6 @@
 import random
-from typing import Callable
+from itertools import cycle
+from typing import Callable, Tuple
 
 import numpy as np
 from collections import defaultdict
@@ -287,21 +288,23 @@ class SmartAnnulusJoinStrategy(JoinStrategy):
             return 10
 
         def num_channel_mapping(fullness: Fullness):
-            return max(1, int(fullness * 60))
+            max_connections = self.annulus.num_connections(self.annulus.min_ring)
+            return max(1, int(fullness * max_connections * 1.3))
 
         self.connection_strategy = BidirectionalConnectionStrategy(deposit_mapping)
         self.num_channel_mapping = num_channel_mapping
 
-    def _get_attractive_slot(self, r: int) -> int:
+    def _get_attractive_slot(self, r: int) -> Tuple[int, int]:
         index_to_attractiveness = self.ring_to_index_to_attractiveness[r]
+        num_slots = 2 ** r
         if not index_to_attractiveness:
-            num_slots = 2 ** r
             i = -1
             while i == -1:
                 try:
-                    i = next(
-                        i for i in range(num_slots) if (r, i) not in self.annulus.coord_to_node
-                    )
+                    left = (i for i in range(num_slots // 2))
+                    right = (i for i in range(num_slots - 1, num_slots // 2 - 1, -1))
+                    sequence = (next(dir_) for dir_ in cycle([left, right]))
+                    i = next(i for i in sequence if (r, i) not in self.annulus.coord_to_node)
                 except StopIteration:
                     print('Ring {} full. Trying next higher ring.'.format(r))
                     r += 1
@@ -309,17 +312,18 @@ class SmartAnnulusJoinStrategy(JoinStrategy):
                         raise ValueError('All suitable rings full.')
                     num_slots *= 2
 
-            return i
+            return r, i
         else:
-            return max(
-                (attractiveness, i) for i, attractiveness in index_to_attractiveness.items()
-            )[1]
+            return r, max(
+                (attractiveness, -self.annulus.ring_distance(0, i, num_slots), i)
+                for i, attractiveness in index_to_attractiveness.items()
+            )[2]
 
     def join(self, raw: RawNetwork, node: Node):
         num_channels = self.num_channel_mapping(node.fullness)
         r = self.annulus.ring_recommendation(num_channels)
 
-        i = self._get_attractive_slot(r)
+        r, i = self._get_attractive_slot(r)
 
         index_to_attractiveness = self.ring_to_index_to_attractiveness[r]
         if i in index_to_attractiveness:

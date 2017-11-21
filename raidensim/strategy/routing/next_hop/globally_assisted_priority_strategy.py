@@ -6,7 +6,6 @@ from raidensim.strategy.routing.next_hop.priority_strategy import (
     PriorityStrategy,
     DistancePriorityStrategy
 )
-from raidensim.util import sigmoid
 
 
 class GloballyAssistedPriorityStrategy(PriorityStrategy):

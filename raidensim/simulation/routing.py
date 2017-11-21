@@ -47,7 +47,7 @@ def plot_network(net: Network, dirpath: str):
     """
     print('Plotting network.')
     net.draw(filepath=os.path.join(dirpath, 'network'))
-    if net.raw.number_of_nodes() < 1000:
+    if net.raw.number_of_nodes() < 2000:
         net.draw(
             labeling_strategy=net.config.position_strategy.label,
             filepath=os.path.join(dirpath, 'network_labels')

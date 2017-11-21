@@ -1,8 +1,8 @@
-import heapq
-
 import pytest
 
 from raidensim.network.annulus import Annulus
+from raidensim.network.node import Node
+from raidensim.strategy.routing.next_hop.priority_strategy import AnnulusPriorityStrategy
 from raidensim.types import DiskCoord
 
 
@@ -326,3 +326,60 @@ def test_full_properties():
                 assert inward_ring_span == annulus.inward_ring_span(r)
                 assert outward_ring_span == annulus.outward_ring_span(r)
                 assert_outward_slot_span_coords((r, i))
+
+
+def test_priority_strategy():
+    annulus = Annulus(9)
+    priority_strategy = AnnulusPriorityStrategy(annulus)
+
+    coords = [
+        (7, 117), (6, 60), (8, 241), (8, 242), (8, 233), (8, 232), (8, 228), (9, 456), (9, 457),
+        (9, 466), (9, 467), (8, 250), (8, 251), (7, 124),
+        (7, 10), (7, 11), (6, 62), (7, 118), (7, 119), (7, 122),
+        (6, 3), (8, 22), (8, 23),
+        (7, 114)
+    ]
+    nodes = {}
+    for i, coord in enumerate(coords):
+        node = Node(i, 1)
+        nodes[coord] = node
+        annulus.add_node(node, coord)
+
+    assert priority_strategy.priority(None, nodes[6, 60], {}, nodes[6, 60], 0) == (-1, 0, 0)
+    assert priority_strategy.priority(None, nodes[8, 233], {}, nodes[8, 233], 0) == (-1, 0, 0)
+
+    assert priority_strategy.priority(None, nodes[6, 60], {}, nodes[8, 241], 0) == (0, 3, 2)
+    assert priority_strategy.priority(None, nodes[6, 60], {}, nodes[8, 242], 0) == (0, 3, 2)
+    assert priority_strategy.priority(None, nodes[6, 60], {}, nodes[8, 233], 0) == (0, 3, 34)
+    assert priority_strategy.priority(None, nodes[6, 60], {}, nodes[8, 232], 0) == (1, 3, 3)
+
+    assert priority_strategy.priority(None, nodes[6, 60], {}, nodes[8, 228], 0) == (1, 19, 3)
+    assert priority_strategy.priority(None, nodes[8, 233], {}, nodes[8, 228], 0) == (1, 19, 0)
+
+    assert priority_strategy.priority(None, nodes[6, 60], {}, nodes[9, 456], 0) == (1, 20, 4)
+    assert priority_strategy.priority(None, nodes[8, 233], {}, nodes[9, 456], 0) == (1, 20, 2)
+
+    assert priority_strategy.priority(None, nodes[6, 60], {}, nodes[9, 457], 0) == (1, 18, 4)
+    assert priority_strategy.priority(None, nodes[8, 233], {}, nodes[9, 457], 0) == (1, 18, 2)
+
+    assert priority_strategy.priority(None, nodes[8, 233], {}, nodes[9, 466], 0) == (0, 2, 1)
+    assert priority_strategy.priority(None, nodes[8, 233], {}, nodes[9, 467], 0) == (0, 2, 1)
+
+    assert priority_strategy.priority(None, nodes[6, 60], {}, nodes[8, 250], 0) == (0, 3, 34)
+    assert priority_strategy.priority(None, nodes[6, 60], {}, nodes[8, 251], 0) == (1, 3, 3)
+    assert priority_strategy.priority(None, nodes[7, 124], {}, nodes[8, 250], 0) == (0, 2, 6)
+    assert priority_strategy.priority(None, nodes[7, 124], {}, nodes[8, 251], 0) == (1, 3, 2)
+
+    assert priority_strategy.priority(None, nodes[7, 10], {}, nodes[6, 62], 0) == (1, 101, 1)
+    assert priority_strategy.priority(None, nodes[7, 11], {}, nodes[6, 62], 0) == (1, 109, 1)
+
+    assert priority_strategy.priority(None, nodes[7, 118], {}, nodes[6, 62], 0) == (1, 45, 1)
+    assert priority_strategy.priority(None, nodes[7, 119], {}, nodes[6, 62], 0) == (1, 37, 1)
+
+    assert priority_strategy.priority(None, nodes[7, 122], {}, nodes[6, 62], 0) == (1, 13, 1)
+
+    assert priority_strategy.priority(None, nodes[6, 3], {}, nodes[8, 23], 0) == (1, 3, 3)
+    assert priority_strategy.priority(None, nodes[8, 22], {}, nodes[8, 23], 0) == (1, 3, 0)
+
+    assert priority_strategy.priority(None, nodes[6, 60], {}, nodes[7, 114], 0) == (1, 17, 2)
+    assert priority_strategy.priority(None, nodes[8, 233], {}, nodes[7, 114], 0) == (1, 17, 1)

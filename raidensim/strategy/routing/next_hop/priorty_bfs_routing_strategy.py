@@ -46,7 +46,7 @@ class PriorityBFSRoutingStrategy(RoutingStrategy):
             for v, e in raw[u].items():
                 if v not in visited and e['capacity'] >= value:
                     new_path = path + [v]
-                    priority = self.priority_strategy.priority(raw, source, u, v, e, target, value)
+                    priority = self.priority_strategy.priority(u, v, e, target, value)
                     i += 1
                     queue_entry = (priority, len(new_path), i, new_path)
                     heapq.heappush(queue, queue_entry)

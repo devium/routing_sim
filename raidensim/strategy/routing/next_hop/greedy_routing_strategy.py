@@ -27,23 +27,23 @@ class GreedyRoutingStrategy(RoutingStrategy):
         for i in range(self.max_depth):
             visited.add(u)
             valid_partners = [
-                (self.priority_strategy.priority(raw, source, u, v, e, target, value), tiebreak, v)
+                (self.priority_strategy.priority(u, v, e, target, value), tiebreak, v)
                 for tiebreak, (v, e) in enumerate(raw[u].items())
-                if v not in visited and e['capacity'] >= value
+                if v not in visited
             ]
             valid_partners = [
                 (priority, tiebreak, partner) for priority, tiebreak, partner in valid_partners
                 if priority is not None
             ]
-            if not valid_partners:
+            if valid_partners:
+                priority, i_v, v = min(valid_partners)
+                path.append(v)
+            else:
                 # Go back.
                 if len(path) == 1:
                     return [], path_history
                 path = path[:-1]
                 v = path[-1]
-            else:
-                priority, i_v, v = min(valid_partners)
-                path.append(v)
             path_history.append(path.copy())
             if v == target:
                 return path, path_history

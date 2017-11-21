@@ -37,8 +37,9 @@ SCRIPT_DIR = os.path.dirname(__file__)
 OUT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, '../out'))
 
 
-ANNULUS_MAX_RING = 8
-NUM_NODES = 2 ** (ANNULUS_MAX_RING + 1) - 2 ** (ANNULUS_MAX_RING // 2)
+ANNULUS_MAX_RING = 9
+# NUM_NODES = 2 ** (ANNULUS_MAX_RING + 1) - 2 ** (ANNULUS_MAX_RING // 2)
+NUM_NODES = 600
 NODE_FAILURE_RATE = 0.0
 
 MAX_ID = 2**32
@@ -50,9 +51,9 @@ ANNULUS = Annulus(ANNULUS_MAX_RING)
 HYPERBOLIC_NETWORK_CONFIG = NetworkConfiguration(
     num_nodes=NUM_NODES,
     max_id=MAX_ID,
-    fullness_dist=BetaDistribution(0.5, 2),
+    fullness_dist=BetaDistribution(0.2, 2),
     position_strategy=AnnulusPositionStrategy(ANNULUS),
-    join_strategy=FullAnnulusJoinStrategy(ANNULUS)
+    join_strategy=SmartAnnulusJoinStrategy(ANNULUS)
 )
 
 LATTICE_NETWORK_CONFIG = NetworkConfiguration(
@@ -133,7 +134,7 @@ def run():
             simulate_scaling(
                 net,
                 dirpath,
-                num_transfers=10000,
+                num_transfers=2000,
                 transfer_value=1,
                 position_strategy=config.position_strategy,
                 routing_strategy=routing_strategy,
