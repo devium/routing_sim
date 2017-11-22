@@ -308,7 +308,7 @@ class SmartAnnulusJoinStrategy(JoinStrategy):
                 except StopIteration:
                     print('Ring {} full. Trying next higher ring.'.format(r))
                     r += 1
-                    if r < self.annulus.min_ring:
+                    if r > self.annulus.max_ring:
                         raise ValueError('All suitable rings full.')
                     num_slots *= 2
 

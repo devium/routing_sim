@@ -39,7 +39,7 @@ OUT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, '../out'))
 
 ANNULUS_MAX_RING = 9
 # NUM_NODES = 2 ** (ANNULUS_MAX_RING + 1) - 2 ** (ANNULUS_MAX_RING // 2)
-NUM_NODES = 600
+NUM_NODES = 300
 NODE_FAILURE_RATE = 0.0
 
 MAX_ID = 2**32
@@ -51,7 +51,7 @@ ANNULUS = Annulus(ANNULUS_MAX_RING)
 HYPERBOLIC_NETWORK_CONFIG = NetworkConfiguration(
     num_nodes=NUM_NODES,
     max_id=MAX_ID,
-    fullness_dist=BetaDistribution(0.2, 2),
+    fullness_dist=BetaDistribution(0.3, 1.8),
     position_strategy=AnnulusPositionStrategy(ANNULUS),
     join_strategy=SmartAnnulusJoinStrategy(ANNULUS)
 )
