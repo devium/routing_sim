@@ -118,6 +118,8 @@ class AnnulusPriorityStrategy(PriorityStrategy):
             target: Node,
             value: int
     ):
+        # TODO: it might be possible to define a distance metric so that this custom priority
+        # strategy can be replaced by a naive distance priority strategy.
         if v == target:
             return -1, 0, 0
 
