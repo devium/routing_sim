@@ -1,5 +1,7 @@
 # Raiden Network Simulation
 
+![Incomplete annulus network](sample_network.png)
+
 ## Overview
 
 This repository features two main scripts in the `bin/` directory:

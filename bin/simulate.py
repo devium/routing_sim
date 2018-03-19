@@ -37,10 +37,10 @@ SCRIPT_DIR = os.path.dirname(__file__)
 OUT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, '../out'))
 
 
-ANNULUS_MAX_RING = 15
-# NUM_NODES = 2 ** (ANNULUS_MAX_RING + 1) - 2 ** (ANNULUS_MAX_RING // 2)
-NUM_NODES = 8000
-NODE_FAILURE_RATE = 0.0
+ANNULUS_MAX_RING = 9
+ANNULUS_MAX_NODES = 2 ** (ANNULUS_MAX_RING + 1) - 2 ** (ANNULUS_MAX_RING // 2)
+NUM_NODES = int(ANNULUS_MAX_NODES * 0.4)
+NODE_FAILURE_RATE = 0.1
 
 MAX_ID = 2**32
 WEAVE_BASE_FACTOR = 2
@@ -51,7 +51,7 @@ ANNULUS = Annulus(ANNULUS_MAX_RING)
 ANNULUS_NETWORK_CONFIG = NetworkConfiguration(
     num_nodes=NUM_NODES,
     max_id=MAX_ID,
-    fullness_dist=BetaDistribution(0.2, 5),
+    fullness_dist=BetaDistribution(0.3, 2),
     position_strategy=AnnulusPositionStrategy(ANNULUS),
     join_strategy=SmartAnnulusJoinStrategy(ANNULUS)
 )
