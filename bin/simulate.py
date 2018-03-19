@@ -37,9 +37,9 @@ SCRIPT_DIR = os.path.dirname(__file__)
 OUT_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, '../out'))
 
 
-ANNULUS_MAX_RING = 9
+ANNULUS_MAX_RING = 15
 # NUM_NODES = 2 ** (ANNULUS_MAX_RING + 1) - 2 ** (ANNULUS_MAX_RING // 2)
-NUM_NODES = 300
+NUM_NODES = 8000
 NODE_FAILURE_RATE = 0.0
 
 MAX_ID = 2**32
@@ -48,10 +48,10 @@ MAX_CHANNEL_DISTANCE_ORDER = int(math.log(NUM_NODES, 2 * WEAVE_BASE_FACTOR))
 LATTICE = WovenLattice(1, WEAVE_BASE_FACTOR, 1, max(1, MAX_CHANNEL_DISTANCE_ORDER))
 ANNULUS = Annulus(ANNULUS_MAX_RING)
 
-HYPERBOLIC_NETWORK_CONFIG = NetworkConfiguration(
+ANNULUS_NETWORK_CONFIG = NetworkConfiguration(
     num_nodes=NUM_NODES,
     max_id=MAX_ID,
-    fullness_dist=BetaDistribution(0.3, 1.8),
+    fullness_dist=BetaDistribution(0.2, 5),
     position_strategy=AnnulusPositionStrategy(ANNULUS),
     join_strategy=SmartAnnulusJoinStrategy(ANNULUS)
 )
@@ -98,7 +98,7 @@ MICRORAIDEN_NETWORK_CONFIG = NetworkConfiguration(
 
 def run():
     # Network configuration.
-    config = HYPERBOLIC_NETWORK_CONFIG
+    config = ANNULUS_NETWORK_CONFIG
 
     fee_strategy = SigmoidNetBalanceFeeStrategy()
 
@@ -141,7 +141,7 @@ def run():
                 fee_strategy=fee_strategy,
                 name=name,
                 max_recorded_failures=1,
-                credit_transfers=False
+                credit_transfers=True
             )
 
     if True:

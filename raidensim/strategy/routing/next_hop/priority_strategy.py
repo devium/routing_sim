@@ -141,7 +141,6 @@ class AnnulusPriorityStrategy(PriorityStrategy):
 
         dr = abs(dr)
 
-
         if di <= half_span:
             return 0, dr, di
         else:

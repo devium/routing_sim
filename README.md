@@ -1,5 +1,14 @@
 # Raiden Network Simulation
 
+## Overview
+
+This repository features two main scripts in the `bin/` directory:
+* `simulate.py`
+* `animate.py`
+
+These scripts allow extensive testing of various kinds of network growth and routing models.
+
+
 ## Installation
 
 ```
@@ -7,23 +16,58 @@ virtualenv env
 env/bin/pip install -e .
 ```
 
-## 2D simulation
 
-```
-env/bin/python bin/routing_sim.py
-```
+## Scripts
 
-## Create rendering using blender
+### `bin/simulate.py`
 
-### Create simulation data.
-1. Configure the constants in `bin/create_animation.py`.
+The `simulate.py` script contains a highly configurable description of the network growth, fee, and routing models to be used in two types of simulations:
+* `simulate_scaling`
+* `simulate_routing`
+
+Results of both simulations are saved in the `out/` directory as a series of `.gif`s and `.png`s in timestamped subdirectories.
+
+A single run of this script may evaluate several different routing models, as defined in `routing_strategies`. You can directly configure the exact mode of these simulations in `simulate.py:run()`
+
+For detailed information on how to configure a network, please see the in-code documentation.
+
+
+#### `simulate_scaling`
+
+This simulation is intended for evaluating a network model with respect to transfer success rate, fees, number of hops, and channel degradation over time.
+
+The scaling simulation performs many transfers over a network of the given description. A limited number of transfer failures are recorded and rendered as a `.gif` for easy debugging. Additional metrics collected include channel imbalance, transfer failures over time, channel distribution, etc.
+
+Transfer crediting is optional, meaning that this simulation can be run without crediting actual transfer values. This may be useful if the intent is to merely evaluate several routing models without testing for network degradation.
+
+![sample_scaling.png]
+
+
+#### `simulate_routing`
+
+This simulation gives a more detailed view of individual routing attempts. Each attempt of routing a transfer through the network is recorded step by step and rendered both in a `.gif` as well as a series of `.png`s. Visited nodes are highlighted in the individual frames to illustrate possible backtracking.
+
+Using this simulation only makes sense if the network is small enough to be rendered. Make sure to skip this step if you are testing for more than, say, 10,000 nodes, as rendering the network may take a long time and you probably end up with a grey blob.
+
+![sample_routing.gif]
+
+### `bin/animate.py`
+
+This script generates animation data that can be read by the `blender/*` scripts to be imported in Blender.
+
+The background video on https://raiden.network/ was created using this script.
+
+Note: chances are this is out of date and broken, since the main focus lies on the `simulate.py` script.
+
+#### Create simulation data.
+1. Configure the constants in `bin/animate.py`.
 1. Run
 
-        env/bin/python bin/create_animation.py
+        env/bin/python bin/animate.py
 
 1. Check for files `blender/network.json` and `blender/animation.json`.
 
-### Import simulation data into Blender
+#### Import simulation data into Blender
 
 1. Edit `blender_setup.py` with a global path to the simulation `blender` directory and copy its contents.
 1. Configure `blender/settings.py`
@@ -36,7 +80,7 @@ env/bin/python bin/routing_sim.py
 
    in Blender's Python console.
 
-### Blender Python commands
+#### Blender Python commands
 
 | Command | Effect |
 | --- | --- |
@@ -47,7 +91,7 @@ env/bin/python bin/routing_sim.py
 | `run_all()` | Does all of the above |
 
 
-### Shaders
+#### Shaders
 
 The `blender_shade.run()` script creates a single material for each element in the network, i.e., for every node and channel.
 

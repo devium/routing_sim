@@ -145,7 +145,7 @@ class Annulus:
         return self.coord_distance(self.node_to_coord[a], self.node_to_coord[b])
 
     def coord_distance(self, a: DiskCoord, b: DiskCoord):
-        return 1
+        return 1 + abs(a[0] - b[0])
 
     def coord_partners(self, coord: DiskCoord) -> Iterator[Node]:
         return (

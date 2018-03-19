@@ -29,12 +29,11 @@ class ConstantNetworkStats:
         self.avg_channel_count = sum(
             num_channels * count for num_channels, count in self.channel_counts.items()
         ) / sum(self.channel_counts.values()) / len(self.channel_counts)
-        # FIXME: channel distance analysis temporarily disabled for speedup
-        # self.channel_distances = Counter(
-        #     2 ** int(math.log2(net.config.position_strategy.distance(u, v)))
-        #     for u, v, e in raw.bi_edges
-        # )
-        self.channel_distances = {1: 1}
+
+        # Note: channel distance evaluation can be disabled for some performance gains.
+        self.channel_distances = Counter(
+            net.config.position_strategy.distance(u, v) for u, v, e in raw.bi_edges
+        )
         self.max_distance = max(self.channel_distances.keys())
         self.min_distance = min(self.channel_distances.keys())
 
