@@ -40,7 +40,7 @@ The scaling simulation performs many transfers over a network of the given descr
 
 Transfer crediting is optional, meaning that this simulation can be run without crediting actual transfer values. This may be useful if the intent is to merely evaluate several routing models without testing for network degradation.
 
-![sample_scaling.png]
+![Scaling simulation result](sample_scaling.png)
 
 
 #### `simulate_routing`
@@ -49,7 +49,7 @@ This simulation gives a more detailed view of individual routing attempts. Each 
 
 Using this simulation only makes sense if the network is small enough to be rendered. Make sure to skip this step if you are testing for more than, say, 10,000 nodes, as rendering the network may take a long time and you probably end up with a grey blob.
 
-![sample_routing.gif]
+![Routing simulation result](sample_routing.gif)
 
 ### `bin/animate.py`
 
