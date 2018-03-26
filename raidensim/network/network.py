@@ -16,14 +16,15 @@ from raidensim.types import Path
 
 
 class Network(object):
-    def __init__(self, config: NetworkConfiguration):
+    def __init__(self, config: NetworkConfiguration, join_nodes: bool = True):
         self.config = config
 
         random.seed(0)
         self.raw = RawNetwork()
-        self.join_nodes()
-        self.raw.remove_isolated()
         self.cached_render_pos = None
+        if join_nodes:
+            self.join_nodes()
+            self.raw.remove_isolated()
 
     def join_nodes(self):
         print('Joining nodes.')
@@ -33,16 +34,19 @@ class Network(object):
             if toc - tic > 5:
                 tic = toc
                 print('Joining node {}/{}'.format(i, self.config.num_nodes))
+            self.join_single_node()
 
-            while True:
-                uid = random.randrange(self.config.max_id)
-                fullness = self.config.fullness_dist.random()
-                node = Node(uid, fullness)
-                if node not in self.raw:
-                    break
+    def join_single_node(self) -> Node:
+        while True:
+            uid = random.randrange(self.config.max_id)
+            fullness = self.config.fullness_dist.random()
+            node = Node(uid, fullness)
+            if node not in self.raw:
+                break
 
-            self.raw.add_node(node)
-            self.config.join_strategy.join(self.raw, node)
+        self.raw.add_node(node)
+        self.config.join_strategy.join(self.raw, node)
+        return node
 
     def reset(self):
         print('Resetting network.')

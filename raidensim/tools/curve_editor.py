@@ -42,12 +42,14 @@ class CurveEditor(object):
         self.ax.set_xlim(-0.1, 1.1)
         self.ax.set_ylim(-0.1, 1.1)
         self.ax.grid(True)
-        self.ax.set_xticklabels(
-            [(self.xmax - self.xmin) * tick + self.xmin for tick in self.ax.get_xticks()]
-        )
-        self.ax.set_yticklabels(
-            [(self.ymax - self.ymin) * tick + self.ymin for tick in self.ax.get_yticks()]
-        )
+        self.ax.set_xticklabels([
+            f'{(self.xmax - self.xmin) * tick + self.xmin : .3g}'
+            for tick in self.ax.get_xticks()
+        ])
+        self.ax.set_yticklabels([
+            f'{(self.ymax - self.ymin) * tick + self.ymin : .3g}'
+            for tick in self.ax.get_yticks()
+        ])
 
         plt.show()
 

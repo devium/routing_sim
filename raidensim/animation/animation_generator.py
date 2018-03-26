@@ -3,13 +3,10 @@ import json
 import os
 import random
 from collections import namedtuple
-from typing import List
-
-import math
+from typing import List, Dict, Tuple
 
 from raidensim.network.network import Network
 from raidensim.network.node import Node
-from raidensim.strategy.creation.join_strategy import MicroRaidenJoinStrategy
 from raidensim.tools.curve_editor import CurveEditor
 from .config import AnimationConfiguration
 
@@ -26,18 +23,12 @@ class AnimationGenerator(object):
     def __init__(self, config: AnimationConfiguration):
         self.config = config
 
-        self.popup_curve = None
-        self.transfer_curve = None
-        self.net = None
-        self.channels = []
-        self.node_to_index = dict()
-        self.channel_to_index = dict()
-        self.hidden_nodes = set()
-        self.hidden_channels = set()
-        self.edges = {}
-        self.visible_nodes = set()
-        self.visible_channels = set()
-        self.animations = []
+        self.popup_curve: CurveEditor = None
+        self.transfer_curve: CurveEditor = None
+        self.net: Network = None
+        self.node_to_index: Dict[Node, int] = {}
+        self.channel_to_index: Dict[Tuple[Node, Node], int] = {}
+        self.animations: List[self.Animation] = []
         self.transfer_id = 0
         self.t = 0.0
 
@@ -48,8 +39,8 @@ class AnimationGenerator(object):
         print('Creating animation for {} nodes.'.format(self.config.network.num_nodes))
         self.get_frequency_curves()
         self.generate_network()
-        self.reset_network()
         self.generate_animation()
+        self.store_network()
 
     def get_frequency_curves(self):
         curves_path = os.path.join(self.config.out_dir, 'curves.json')
@@ -62,7 +53,7 @@ class AnimationGenerator(object):
             popup_curve_points = []
             transfer_curve_points = []
 
-        if self.config.popup_channels:
+        if self.config.grow_network:
             self.popup_curve = CurveEditor(
                 points=popup_curve_points,
                 title='Channel Popup Frequency (max = {}).'.format(self.config.popup_freq_max),
@@ -81,7 +72,7 @@ class AnimationGenerator(object):
             json.dump(
                 {
                     'popup': self.popup_curve.points
-                    if self.config.popup_channels
+                    if self.config.grow_network
                     else popup_curve_points,
                     'transfer': self.transfer_curve.points
                 },
@@ -91,73 +82,36 @@ class AnimationGenerator(object):
     def generate_network(self):
         # Export final network configuration.
         random.seed(0)
+        self.net = Network(self.config.network, join_nodes=False)
+        if not self.config.grow_network:
+            self.net.join_nodes()
 
-        self.net = Network(self.config.network)
-        self.node_to_index = {node: index for index, node in enumerate(self.net.raw.nodes)}
-
-        node_pos = self.calc3d_positions()
-        self.channels = list(frozenset({u, v}) for u, v, e in self.net.raw.bi_edges)
-        self.channel_to_index = {frozenset(c): i for i, c in enumerate(self.channels)}
-        channels_indexed = [
-            (self.node_to_index[a], self.node_to_index[b]) for a, b in self.channels
-        ]
-
-        with open(os.path.join(self.config.out_dir, 'network.json'), 'w') as network_file:
-            json.dump({
-                'nodes': node_pos,
-                'channels': channels_indexed
-            }, network_file, indent=2)
-
-    def calc3d_positions(self):
+    def calc3d_positions(self) -> List[Tuple[int, int, int]]:
         """"
         Helper to position nodes in 3d.
-        Nodes are again distributed on rings, their address determining the position on that ring.
-        The fuller nodes are (more channels, higher deposits) the higher these nodes are positioned.
-        The dist_pdf is expected to be the fullness probability-density function so that nodes are
-        evenly distributed on a surface that corresponds to their fullness distribution.
+        Nodes are positioned on a 2D plane according to the network's position strategy.
         """
         positions = []
-        max_fullness = max(n.fullness for n in self.net.raw.nodes)
-        min_fullness = min(n.fullness for n in self.net.raw.nodes)
-        dist_pdf = self.config.network.fullness_dist.get_pdf()
-        pdf_scale = 1.0 / max(
-            dist_pdf([n.fullness for n in self.net.raw.nodes])
-        )
-        range_ = float(max_fullness - min_fullness)
 
-        for node in self.net.raw.nodes:
+        nodes_ordered = list(zip(*sorted(
+            (index, node)
+            for node, index in self.node_to_index.items()
+        )))[1]
+        for node in nodes_ordered:
             # Put x,y on circle of radius 1.
-            rad = 2 * math.pi * node.uid / self.net.config.max_id
-            x, y = math.sin(rad), math.cos(rad)
+            x, y = self.config.network.position_strategy.map(node)
 
-            # Height above ground (light client =~0, full node up to 1).
-            h = (node.fullness - min_fullness) / range_
+            # TODO: add some sensible displacement along the z axis.
+            z = 0
 
-            # Adjust radius to evenly distribute nodes on the 3D surface.
-            r = dist_pdf(h) * pdf_scale
-            # Make hole at top by moving higher nodes out a bit (min radius = hole_radius).
-            r = (1 - self.config.top_hole_radius) * r + self.config.top_hole_radius
-            x *= r
-            y *= r
-            positions.append([x, y, h])
+            positions.append([x, y, z])
 
         return positions
 
-    def reset_network(self):
-        # Revert simulation back to an edgeless network. Build animations from there.
-        if self.config.popup_channels:
-            self.hidden_nodes = set(self.net.raw.nodes)
-            self.hidden_channels = self.channels.copy()
-            self.edges = dict(self.net.raw.edges)
-            self.net.raw.remove_edges_from(list(self.net.raw.edges))
-        else:
-            self.visible_nodes = set(self.net.raw.nodes)
-            self.visible_channels = self.channels.copy()
-
     def generate_animation(self):
-        # Generate node popup and channel transfer animations.
+        # Generate node join and channel transfer animations.
         print('Generating animation.')
-        last_popup = 0.0
+        last_join = 0.0
         last_transfer = 0.0
         tic = time.time()
         while self.t < self.config.animation_length:
@@ -168,136 +122,141 @@ class AnimationGenerator(object):
                     self.t, self.config.animation_length
                 ))
 
-            if self.config.popup_channels:
-                channel_popup_freq = self.popup_curve.evaluate(self.t)
-                channel_popup_delta = 1.0 / channel_popup_freq if channel_popup_freq else 1e12
+            if self.config.grow_network:
+                node_join_freq = self.popup_curve.evaluate(self.t)
+                node_join_delta = 1.0 / node_join_freq if node_join_freq else 1e12
 
-                while self.hidden_channels and self.t - last_popup >= channel_popup_delta:
-                    last_popup += channel_popup_delta
-                    self.create_channels(1, connected_only=bool(self.animations))
+                while (
+                        self.net.raw.number_of_nodes() < self.config.network.num_nodes and
+                        self.t - last_join >= node_join_delta
+                ):
+                    last_join += node_join_delta
+                    self.join_node()
 
             transfer_freq = self.transfer_curve.evaluate(self.t)
             transfer_delta = 1.0 / transfer_freq if transfer_freq else 1e12
 
-            while len(self.visible_nodes) >= 2 and self.t - last_transfer >= transfer_delta:
+            while (
+                    self.net.raw.number_of_nodes() >= 2 and
+                    self.t - last_transfer >= transfer_delta
+            ):
                 last_transfer += transfer_delta
                 self.create_transfer()
 
             self.t += self.config.simulation_step_size
 
-        print('Last channel popup at {}'.format(last_popup))
+        print('Last node join at {}'.format(last_join))
 
         with open(os.path.join(self.config.out_dir, 'animation.json'), 'w') as animation_file:
             content = {
-                'channels_popup': self.config.popup_channels,
+                'channels_popup': self.config.grow_network,
                 'animations': self.animations
             }
             json.dump(content, animation_file, indent=2)
 
-    def popup_channels(self, channels):
+    def store_network(self):
+        """
+        Stores the final network topology for rendering.
+        """
+        node_pos = self.calc3d_positions()
+        channels_ordered = list(zip(*sorted({
+            (index, frozenset((self.node_to_index[u], self.node_to_index[v])))
+            for (u, v), index in self.channel_to_index.items()
+        })))[1]
+        channels_ordered = [tuple(channel) for channel in channels_ordered]
+
+        with open(os.path.join(self.config.out_dir, 'network.json'), 'w') as network_file:
+            json.dump({
+                'nodes': node_pos,
+                'channels': channels_ordered
+            }, network_file, indent=2)
+
+    def popup_channels(self, channel_indices: List[int]):
         """
         Creates a 'show' animation for the given channels and the associated nodes. Already visible
         nodes or channels are ignored.
         """
-        for channel in channels:
-            if channel in self.visible_channels:
-                return []
-
-            self.popup_nodes(channel)
+        for channel_index in channel_indices:
             self.animations.append(self.Animation(
                 time=self.t,
                 animation_type='show',
                 element_type='channel',
-                element_id=self.channel_to_index[channel],
+                element_id=channel_index,
                 transfer_id=-1
             ))
-            self.hidden_channels.remove(channel)
-            self.visible_channels.add(channel)
 
-    def popup_nodes(self, nodes):
+    def popup_nodes(self, node_indices: List[int]):
         """
-        Creates 'show' animations for the given nodes at a certain frame. Only hidden nodes are
-        considered.
+        Creates 'show' animations for the given nodes at a certain frame.
         """
-        nodes &= self.hidden_nodes
-
-        for node in nodes:
+        for node_index in node_indices:
             self.animations.append(self.Animation(
                 time=self.t,
                 animation_type='show',
                 element_type='node',
-                element_id=self.node_to_index[node],
+                element_id=node_index,
                 transfer_id=-1
             ))
-            self.hidden_nodes.remove(node)
-            self.visible_nodes.add(node)
 
-    def create_channels(self, count, connected_only=True):
+    def join_node(self):
         """
-        Creates both the animation and graph topology in the network simulation for new channels.
+        Joins a node to the network using the specified join strategy. A popup animation for its
+        channels is automatically created.
         """
-        if connected_only:
-            connected_hidden_channels = [
-                channel for channel in self.hidden_channels if channel & self.visible_nodes
-            ]
+        node = self.net.join_single_node()
+        node_index = len(self.node_to_index)
+        self.node_to_index[node] = node_index
 
-            count = min(count, len(connected_hidden_channels))
-            new_channels = random.sample(connected_hidden_channels, count)
-        else:
-            count = min(count, len(self.hidden_channels))
-            new_channels = random.sample(self.hidden_channels, count)
+        popup_channel_indices: List[int] = []
+        for partner in self.net.raw[node]:
+            channel_index = len(self.channel_to_index) // 2
+            self.channel_to_index[(node, partner)] = channel_index
+            self.channel_to_index[(partner, node)] = channel_index
+            popup_channel_indices.append(channel_index)
 
-        self.popup_channels(new_channels)
-        for a, b in new_channels:
-            self.net.raw.add_edge(a, b, **self.edges[a, b])
-            self.net.raw.add_edge(b, a, **self.edges[b, a])
+        self.popup_nodes([node_index])
+        self.popup_channels(popup_channel_indices)
 
     def create_transfer(self):
         for i in range(self.config.transfer_attempts_max):
-            if isinstance(self.config.network.join_strategy, MicroRaidenJoinStrategy):
-                channel = random.sample(self.visible_channels, 1)
-                if channel:
-                    self.flash_route(list(channel[0]))
-                    self.transfer_id += 1
-                    break
-            else:
-                source, target = random.sample(self.visible_nodes, 2)
-                path, _ = self.config.routing_model.route(
-                    self.net.raw, source, target, self.config.transfer_value
-                )
-                if path:
-                    # Find channel for each hop.
-                    self.flash_route(path)
-                    self.transfer_id += 1
-                    break
+            source, target = random.sample(self.net.raw.nodes, 2)
+            path, _ = self.config.routing_model.route(
+                self.net.raw, source, target, self.config.transfer_value
+            )
+            if path:
+                # Find channel for each hop.
+                self.flash_path(path)
+                self.transfer_id += 1
+                break
 
-    def flash_nodes(self, nodes: List[Node], time_offset=0):
+    def flash_nodes(self, node_indices: List[int], time_offset=0):
         """
         Creates a 'flash' animation for the given nodes.
         """
-        for node in nodes:
+        for node_index in node_indices:
             self.animations.append(self.Animation(
                 time=self.t + time_offset,
                 animation_type='flash',
                 element_type='node',
-                element_id=self.node_to_index[node],
+                element_id=node_index,
                 transfer_id=self.transfer_id
             ))
 
-    def flash_route(self, route: List[Node]):
+    def flash_path(self, path: List[Node]):
         """
         Creates a 'flash' animation for a given route.
         """
         time_offset = 0
-        if route:
-            self.flash_nodes([route[0]])
-        for i in range(len(route) - 1):
-            self.flash_nodes([route[i + 1]], time_offset)
+
+        if path:
+            self.flash_nodes([self.node_to_index[path[0]]])
+        for i in range(len(path) - 1):
+            self.flash_nodes([self.node_to_index[path[i + 1]]], time_offset)
             self.animations.append(self.Animation(
                 time=self.t + time_offset,
                 animation_type='flash',
                 element_type='channel',
-                element_id=self.channel_to_index[frozenset([route[i], route[i+1]])],
+                element_id=self.channel_to_index[path[i], path[i+1]],
                 transfer_id=self.transfer_id
             ))
             time_offset += self.config.transfer_hop_delay

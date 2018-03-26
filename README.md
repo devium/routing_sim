@@ -59,7 +59,7 @@ This script generates animation data that can be read by the `blender/*` scripts
 
 The background video on https://raiden.network/ was created using this script.
 
-Note: chances are this is out of date and broken, since the main focus lies on the `simulate.py` script.
+![Network rendering](sample_rendering.gif)
 
 #### Create simulation data.
 1. Configure the constants in `bin/animate.py`.

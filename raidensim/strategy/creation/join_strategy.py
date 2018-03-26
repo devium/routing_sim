@@ -6,7 +6,6 @@ import numpy as np
 from collections import defaultdict
 
 from raidensim.network.annulus import Annulus
-from raidensim.network.hyperbolic_disk import HyperbolicDisk
 from raidensim.network.lattice import WovenLattice
 from raidensim.network.node import Node
 from raidensim.network.raw_network import RawNetwork
@@ -14,11 +13,9 @@ from raidensim.strategy.creation.filter_strategy import (
     IdentityFilterStrategy,
     NotConnectedFilterStrategy,
     MicroRaidenServerFilterStrategy,
-    DistanceFilterStrategy,
     FullerFilterStrategy,
     AcceptedLimitsFilterStrategy,
     MinIncomingDepositFilterStrategy,
-    TotalBidirectionalLimitsFilterStrategy,
     KademliaFilterStrategy)
 from raidensim.strategy.position_strategy import RingPositionStrategy
 from .connection_strategy import (
@@ -31,7 +28,7 @@ from .selection_strategy import (
     FirstMatchSelectionStrategy,
     RandomAuxLatticeSelectionStrategy,
     RandomSelectionStrategy)
-from raidensim.types import Fullness, IntRange, DiskCoord
+from raidensim.types import Fullness, IntRange
 
 
 def linear_int(min_: int, max_: int, fullness: float) -> int:

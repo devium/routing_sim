@@ -22,7 +22,7 @@ class AnimationConfiguration:
         self.out_dir = out_dir
         self.network = network
         self.routing_model = routing_model
-        self.popup_channels = popup_channels
+        self.grow_network = popup_channels
         self.animation_length = animation_length
         self.transfer_hop_delay = transfer_hop_delay
         self.transfer_freq_max = transfer_freq_max
